@@ -1,0 +1,51 @@
+// == Import System Example ==
+// Demonstrates importing from standard packages and local files.
+
+// 1. Standard Package Import
+import std.math.*;
+println("Math.pi: " + pi);
+println("Math.abs(-5): " + abs(-5));
+
+// 2. File Import with Alias
+// We import the local module 'math_utils.alang' as 'utils'
+// Note: The path is relative to the entry script or configured import base
+import "Module/math_utils.alang" as utils;
+
+println("--- File Import (with alias) ---");
+println("Version: " + utils.Version);
+println("PI_APPROX: " + utils.PI_APPROX); // Implicitly exported
+println("Add(10, 20): " + utils.add(10, 20));
+println("Multiply(3, 4): " + utils.Multiply(3, 4)); // Implicitly exported
+
+let calc = new utils.Calculator();
+println("Calculator: " + calc.calc(5));
+
+let solver = new utils.Solver();
+println("Solver: " + solver.solve());
+
+// 3. File Import (Merge symbols)
+// This brings exported symbols directly into current scope
+import "Module/math_utils.alang";
+
+println("--- File Import (merge) ---");
+println("Direct access to Version: " + Version);
+println("Direct access to Multiply: " + Multiply(5, 5));
+
+// 4. Visibility Check
+println("--- Visibility Check ---");
+// internalSecret is not exported (lowercase, no export keyword)
+if (utils.internalSecret == null) {
+    println("PASS: internalSecret is hidden");
+} else {
+    println("FAIL: internalSecret is visible!");
+}
+
+// helper class is not exported
+try {
+    let h = new utils.helper();
+    println("FAIL: helper class should be hidden");
+} catch (e) {
+    println("PASS: helper class is hidden");
+}
+from "Module/math_utils.alang" import hiddenNotExported;
+println("hiddenNotExported(): " + hiddenNotExported());

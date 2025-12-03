@@ -1,0 +1,22 @@
+{
+    "files.associations": {
+        "*.alang": "javascript",
+        "functional": "cpp",
+        "xstring": "cpp",
+        "variant": "cpp",
+        "mutex": "cpp",
+        "memory": "cpp",
+        "utility": "cpp",
+        "unordered_set": "cpp",
+        "filesystem": "cpp",
+        "iostream": "cpp",
+        "bitset": "cpp",
+        "string_view": "cpp",
+        "regex": "cpp",
+        "condition_variable": "cpp",
+        "optional": "cpp",
+        "sstream": "cpp",
+        "istream": "cpp"
+    },
+    "cmake.sourceDirectory": "/Users/asultop/AsulTop/CXXProj/AsulLang-TRAE"
+}
