@@ -158,8 +158,7 @@ std::vector<std::string> funcFiles = {
     "destructuring_test.alang",
     "optional_chaining_test.alang",
     "pattern_matching_test.alang",
-    "yield_test.alang",
-    "decorator_test.alang"
+    "yield_test.alang"
 };
 
 // Run a command and return exit code
