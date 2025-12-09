@@ -130,6 +130,43 @@ public:
 			if (fn) fn();
 		}
 	}
+	
+	// Drain event loop for a specified duration (in milliseconds)
+	// If timeoutMs < 0, run until stopCondition returns true
+	// Returns true if stopCondition was satisfied, false on timeout
+	template<typename StopCondition>
+	bool drainEventLoopUntil(double timeoutMs, StopCondition stopCondition) {
+		auto startTime = std::chrono::steady_clock::now();
+		while (true) {
+			if (stopCondition()) return true;
+			
+			if (timeoutMs >= 0) {
+				auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - startTime
+				).count();
+				if (elapsed >= timeoutMs) return false;
+			}
+			
+			std::function<void()> fn;
+			{
+				std::unique_lock<std::mutex> lk(loopMutex);
+				if (!taskQueue.empty()) {
+					fn = std::move(taskQueue.front());
+					taskQueue.pop();
+				}
+			}
+			if (fn) {
+				fn();
+			} else {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			}
+		}
+	}
+	
+	// Simple drain for a fixed duration
+	void drainEventLoopFor(double timeoutMs) {
+		drainEventLoopUntil(timeoutMs, []{ return false; });
+	}
 
 	// Import external file: resolve path, read, parse and execute in isolated env, then return module object
 	std::shared_ptr<Object> importFilePath(const std::string& rawPath) {
@@ -896,24 +933,32 @@ public:
 			}
 			auto p = std::get<std::shared_ptr<PromiseState>>(v);
 			if (!p) return Value{std::monostate{}};
-			// While waiting, cooperatively drain the event loop so async callbacks keep running.
-			Interpreter* loop = static_cast<Interpreter*>(p->loopPtr);
-			using namespace std::chrono;
-			for (;;) {
+			// Drain event loop while waiting for the promise to settle
+			// This allows async callbacks (e.g., HTTP server handlers) to run
+			while (true) {
 				{
 					std::unique_lock<std::mutex> lk(p->mtx);
-					if (p->settled) break;
-					// If no event loop available, fallback to timed wait to avoid busy-loop.
-					p->cv.wait_for(lk, milliseconds(2));
+					if (p->settled) {
+						if (p->rejected) throw ExceptionSignal{ p->result };
+						return p->result;
+					}
 				}
-				if (loop) {
-					// Run any queued tasks; sleep briefly to yield.
-					loop->runEventLoopUntilIdle();
-					std::this_thread::sleep_for(milliseconds(1));
+				// Process pending tasks from the event loop
+				std::function<void()> fn;
+				{
+					std::unique_lock<std::mutex> lk(loopMutex);
+					if (!taskQueue.empty()) {
+						fn = std::move(taskQueue.front());
+						taskQueue.pop();
+					}
+				}
+				if (fn) {
+					fn();
+				} else {
+					// No tasks pending, wait briefly to avoid busy loop
+					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}
 			}
-			if (p->rejected) throw ExceptionSignal{ p->result };
-			return p->result;
 		}
 		if (auto yieldExpr = std::dynamic_pointer_cast<YieldExpr>(expr)) {
 			// For now, yield simply evaluates to the value (basic implementation)
@@ -1152,45 +1197,24 @@ public:
 			}
 			auto klass = std::get<std::shared_ptr<ClassInfo>>(cal);
 			std::shared_ptr<Instance> inst;
-			// Check if any class in the inheritance chain is native
-			if (hasNativeInChain(klass)) {
+			if (klass->isNative) {
 				inst = std::make_shared<InstanceExt>();
 			} else {
 				inst = std::make_shared<Instance>();
 			}
 			inst->klass = klass;
-			
-			// Collect all constructors in the inheritance chain (base to derived)
-			std::vector<std::shared_ptr<Function>> ctors;
-			collectConstructors(klass, ctors);
-			
-			// Prepare arguments for constructors
-			std::vector<Value> args; args.reserve(nw->args.size());
-			for (auto& a : nw->args) args.push_back(evaluate(a));
-			
-			// Call each constructor in order (base first, then derived)
-			for (size_t ctorIdx = 0; ctorIdx < ctors.size(); ++ctorIdx) {
-				auto& ctor = ctors[ctorIdx];
+			// constructor (lookup super chain)
+			auto ctor = findMethod(klass, "constructor");
+			if (ctor) {
+				std::vector<Value> args; args.reserve(nw->args.size());
+				for (auto& a : nw->args) args.push_back(evaluate(a));
 				// bind this
 				auto bound = std::make_shared<Function>(*ctor);
 				auto thisEnv = std::make_shared<Environment>(bound->closure);
 				thisEnv->define("this", inst);
 				bound->closure = thisEnv;
-				
-				// Determine which arguments to pass
-				// Base class constructors (except the last one) get called with no arguments
-				// The most derived constructor gets the user-provided arguments
-				std::vector<Value> ctorArgs;
-				if (ctorIdx == ctors.size() - 1) {
-					// Most derived constructor - use provided arguments
-					ctorArgs = args;
-				} else {
-					// Base class constructor - call with no arguments
-					ctorArgs.clear();
-				}
-				
 				if (bound->isBuiltin) {
-					try { (void)bound->builtin(ctorArgs, bound->closure); }
+					try { (void)bound->builtin(args, bound->closure); }
 					catch (const std::exception& ex) {
 						std::string s = ex.what();
 						if (s.find("line ") == std::string::npos) {
@@ -1199,33 +1223,11 @@ public:
 						throw;
 					}
 				} else {
-					// For non-builtin constructors, check parameter count
-					bool isBaseConstructor = (ctorIdx < ctors.size() - 1);
-					
-					// Base class constructors are called with no arguments
-					// They must either have no parameters or have default values for all parameters
-					if (isBaseConstructor) {
-						if (!bound->params.empty() && ctorArgs.empty()) {
-							// Check if all parameters have defaults (would be supported)
-							// For now, require parameterless base constructors
-							std::ostringstream oss; 
-							oss << "Base class constructor requires parameters but inheritance does not support parameter passing yet. "
-							    << "Base class constructors must be parameterless. "
-							    << "at line " << nw->line << ", column " << nw->column << ", length " << nw->length;
-							throw std::runtime_error(oss.str());
-						}
-					} else {
-						// Most derived constructor - check normal arity
-						if (ctorArgs.size() != bound->params.size()) {
-							std::ostringstream oss; 
-							oss << "Constructor expects " << bound->params.size() << " arguments but got " << ctorArgs.size()
-							    << " at line " << nw->line << ", column " << nw->column << ", length " << nw->length;
-							throw std::runtime_error(oss.str());
-						}
+					if (args.size() != bound->params.size()) {
+						std::ostringstream oss; oss << "Arity mismatch at line " << nw->line << ", column " << nw->column << ", length " << nw->length; throw std::runtime_error(oss.str());
 					}
-					
 					auto local = std::make_shared<Environment>(bound->closure);
-					for (size_t i=0;i<ctorArgs.size() && i<bound->params.size();++i) local->define(bound->params[i], ctorArgs[i]);
+					for (size_t i=0;i<args.size();++i) local->define(bound->params[i], args[i]);
 					try { executeBlock(bound->body, local); } catch (const ReturnSignal&) {}
 				}
 			}
@@ -2132,31 +2134,6 @@ public:
 		}
 		return nullptr;
 	}
-	
-	// Check if any class in the inheritance chain is native
-	static bool hasNativeInChain(std::shared_ptr<ClassInfo> k) {
-		if (!k) return false;
-		if (k->isNative) return true;
-		for (auto& s : k->supers) {
-			if (hasNativeInChain(s)) return true;
-		}
-		return false;
-	}
-	
-	// Collect all constructors in the inheritance chain (from base to derived)
-	static void collectConstructors(std::shared_ptr<ClassInfo> k, std::vector<std::shared_ptr<Function>>& ctors) {
-		if (!k) return;
-		// First collect from supers (base classes first)
-		for (auto& s : k->supers) {
-			collectConstructors(s, ctors);
-		}
-		// Then add this class's constructor if it has one
-		auto it = k->methods.find("constructor");
-		if (it != k->methods.end()) {
-			ctors.push_back(it->second);
-		}
-	}
-	
 	Value getProperty(const Value& obj, const std::string& name) {
 		// Instance: fields then methods
 		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
