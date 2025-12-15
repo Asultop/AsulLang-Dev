@@ -86,7 +86,7 @@ void registerStdPathPackage(Interpreter& interp) {
 		auto relativeFn = std::make_shared<Function>(); relativeFn->isBuiltin = true;
 		relativeFn->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
 			if (args.size() < 2) {
-				throw std::runtime_error("relative expects 2 arguments (from, to)");
+				throw std::runtime_error("relative 需要 2 个参数 (from, to)");
 			}
 			fs::path from(toString(args[0]));
 			fs::path to(toString(args[1]));
@@ -101,6 +101,13 @@ void registerStdPathPackage(Interpreter& interp) {
 
 		(*pathPkg)["sep"] = Value{ std::string(1, fs::path::preferred_separator) };
 	});
+}
+
+PackageMeta getStdPathPackageMeta() {
+    PackageMeta pkg;
+    pkg.name = "std.path";
+    pkg.exports = { "join", "resolve", "dirname", "basename", "extname", "isAbsolute", "normalize", "relative", "sep" };
+    return pkg;
 }
 
 } // namespace asul

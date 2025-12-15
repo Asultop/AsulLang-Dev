@@ -17,6 +17,5 @@
         "optional": "cpp",
         "sstream": "cpp",
         "istream": "cpp"
-    },
-    "cmake.sourceDirectory": "/Users/asultop/AsulTop/CXXProj/AsulLang-TRAE"
+    }
 }

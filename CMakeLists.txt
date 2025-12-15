@@ -44,7 +44,18 @@ set(SRCS
   src/AsulPackages/Yaml/Yaml.cpp
   src/AsulPackages/Os/Os.cpp
   src/AsulPackages/Csv/Csv.cpp
+  src/AsulPackages/AsulPackages.cpp
 )
+
+# C++ Language Server (LSP) executable
+add_executable(alang-lsp
+  AlangLsp.cpp
+  src/AsulLexer.cpp
+  src/AsulParser.cpp
+  src/AsulRuntime.cpp
+  src/AsulPackages/AsulPackages.cpp
+)
+target_include_directories(alang-lsp PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
 
@@ -146,18 +157,7 @@ if(WIN32)
 endif()
 
 find_package(OpenSSL)
-find_package(CURL)
-
 target_link_libraries(alang PRIVATE Threads::Threads)
-
-# Link CURL for HTTP/2 support (optional)
-if (CURL_FOUND)
-  target_link_libraries(alang PRIVATE CURL::libcurl)
-  target_compile_definitions(alang PRIVATE ASUL_HAS_CURL=1)
-  message(STATUS "libcurl found: HTTP/2 support enabled")
-else()
-  message(WARNING "libcurl not found: HTTP/2 support will not be available. Install libcurl-dev to enable HTTP/2.")
-endif()
 
 # Link OpenSSL if available
 if (OPENSSL_FOUND)
@@ -201,6 +201,10 @@ else()
   )
   set_target_properties(test_runner PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+  # Place LSP server next to the VS Code extension for easy launching in dev
+  set_target_properties(alang-lsp PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/vscode-extension/bin
   )
 endif()
 

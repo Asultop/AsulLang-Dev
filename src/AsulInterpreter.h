@@ -130,43 +130,6 @@ public:
 			if (fn) fn();
 		}
 	}
-	
-	// Drain event loop for a specified duration (in milliseconds)
-	// If timeoutMs < 0, run until stopCondition returns true
-	// Returns true if stopCondition was satisfied, false on timeout
-	template<typename StopCondition>
-	bool drainEventLoopUntil(double timeoutMs, StopCondition stopCondition) {
-		auto startTime = std::chrono::steady_clock::now();
-		while (true) {
-			if (stopCondition()) return true;
-			
-			if (timeoutMs >= 0) {
-				auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::steady_clock::now() - startTime
-				).count();
-				if (elapsed >= timeoutMs) return false;
-			}
-			
-			std::function<void()> fn;
-			{
-				std::unique_lock<std::mutex> lk(loopMutex);
-				if (!taskQueue.empty()) {
-					fn = std::move(taskQueue.front());
-					taskQueue.pop();
-				}
-			}
-			if (fn) {
-				fn();
-			} else {
-				std::this_thread::sleep_for(std::chrono::milliseconds(1));
-			}
-		}
-	}
-	
-	// Simple drain for a fixed duration
-	void drainEventLoopFor(double timeoutMs) {
-		drainEventLoopUntil(timeoutMs, []{ return false; });
-	}
 
 	// Import external file: resolve path, read, parse and execute in isolated env, then return module object
 	std::shared_ptr<Object> importFilePath(const std::string& rawPath) {
@@ -275,6 +238,11 @@ public:
 			if (auto asg = std::dynamic_pointer_cast<AssignExpr>(expr)) {
 				Value v = evaluate(asg->value);
 				if (!env->assign(asg->name, v)) throw std::runtime_error("Undefined variable '" + asg->name + "' at line " + std::to_string(asg->line));
+				return v;
+			}
+			if (auto dasg = std::dynamic_pointer_cast<DestructuringAssignExpr>(expr)) {
+				Value v = evaluate(dasg->value);
+				destructurePattern(dasg->pattern, v);
 				return v;
 			}
 		if (auto arr = std::dynamic_pointer_cast<ArrayLiteralExpr>(expr)) {
@@ -933,32 +901,10 @@ public:
 			}
 			auto p = std::get<std::shared_ptr<PromiseState>>(v);
 			if (!p) return Value{std::monostate{}};
-			// Drain event loop while waiting for the promise to settle
-			// This allows async callbacks (e.g., HTTP server handlers) to run
-			while (true) {
-				{
-					std::unique_lock<std::mutex> lk(p->mtx);
-					if (p->settled) {
-						if (p->rejected) throw ExceptionSignal{ p->result };
-						return p->result;
-					}
-				}
-				// Process pending tasks from the event loop
-				std::function<void()> fn;
-				{
-					std::unique_lock<std::mutex> lk(loopMutex);
-					if (!taskQueue.empty()) {
-						fn = std::move(taskQueue.front());
-						taskQueue.pop();
-					}
-				}
-				if (fn) {
-					fn();
-				} else {
-					// No tasks pending, wait briefly to avoid busy loop
-					std::this_thread::sleep_for(std::chrono::milliseconds(1));
-				}
-			}
+			std::unique_lock<std::mutex> lk(p->mtx);
+			p->cv.wait(lk, [&]{ return p->settled; });
+			if (p->rejected) throw ExceptionSignal{ p->result };
+			return p->result;
 		}
 		if (auto yieldExpr = std::dynamic_pointer_cast<YieldExpr>(expr)) {
 			// For now, yield simply evaluates to the value (basic implementation)
@@ -1700,6 +1646,41 @@ public:
 				fn->isAsync = m->isAsync;
 				fn->isGenerator = m->isGenerator;
 				
+				// Apply decorators
+				Value methodVal = Value{fn};
+				for (auto it = m->decorators.rbegin(); it != m->decorators.rend(); ++it) {
+					Value decoratorFunc = evaluate(*it);
+					if (!std::holds_alternative<std::shared_ptr<Function>>(decoratorFunc)) {
+						throw std::runtime_error("Decorator must be a function");
+					}
+					auto decFn = std::get<std::shared_ptr<Function>>(decoratorFunc);
+					std::vector<Value> args = {methodVal};
+					
+					if (decFn->isBuiltin) {
+						methodVal = decFn->builtin(args, decFn->closure);
+					} else {
+						auto callEnv = std::make_shared<Environment>(decFn->closure);
+						for (size_t i = 0; i < decFn->params.size() && i < args.size(); ++i) {
+							callEnv->define(decFn->params[i], args[i]);
+						}
+						try {
+							auto prevEnv = env;
+							env = callEnv;
+							for (auto& s : decFn->body) execute(s);
+							env = prevEnv;
+							methodVal = Value{std::monostate{}}; 
+						} catch (const ReturnSignal& ret) {
+							methodVal = ret.value;
+						}
+					}
+				}
+				
+				if (std::holds_alternative<std::shared_ptr<Function>>(methodVal)) {
+					fn = std::get<std::shared_ptr<Function>>(methodVal);
+				} else if (!m->decorators.empty() && !std::holds_alternative<std::monostate>(methodVal)) {
+					throw std::runtime_error("Method decorator must return a function");
+				}
+
 				if (m->isStatic) {
 					klass->staticMethods[m->name] = fn;
 				} else {

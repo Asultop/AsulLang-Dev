@@ -22,6 +22,7 @@
   - [构建步骤](#构建步骤)
   - [运行方式](#运行方式)
   - [平台注意事项](#平台注意事项)
+- [VSCode 语法高亮插件](#-vscode-语法高亮插件)
 - [语言特性详解](#-语言特性详解)
   - [基础语法](#基础语法)
   - [数据类型与内置函数](#数据类型与内置函数)
@@ -31,7 +32,6 @@
   - [函数特性](#函数特性)
   - [面向对象](#面向对象)
   - [异步编程](#异步编程)
-  - [网络与 HTTP/2](#网络与-http2)
   - [元编程](#元编程)
   - [模块与导入](#模块与导入)
   - [文件I/O](#文件-io-stdio)
@@ -66,8 +66,7 @@ ALang 是一款基于 C++17 开发的轻量脚本语言解释器/运行时，专
 - ⚡ **异步编程**：`async/await`、`Promise`、`then/catch`、事件循环
 - 🔍 **元编程能力**：`eval(string)` 动态执行、`quote(string)` Token 级源码操作
 - 📥 **模块系统**：文件导入与包导入（`import`/`from`），支持去重机制
-- 📚 **标准库丰富**：字符串、数学、文件 I/O、网络（支持 HTTP/2）、JSON/XML/YAML 解析等
-- 🌐 **HTTP/2 支持**：基于 libcurl 的现代 HTTP/2 协议支持，自动协议协商
+- 📚 **标准库丰富**：字符串、数学、文件 I/O、网络、JSON/XML/YAML 解析等
 
 ---
 
@@ -82,6 +81,14 @@ ALang/
 │   ├── fileIOExample.alang
 │   ├── lambdaExample.alang
 │   └── ...（更多示例）
+├── vscode-extension/         # VSCode 语法高亮扩展
+│   ├── package.json          # 扩展清单文件
+│   ├── syntaxes/             # TextMate 语法定义
+│   │   └── alang.tmLanguage.json
+│   ├── language-configuration.json  # 语言配置
+│   ├── examples/             # 语法高亮示例
+│   ├── images/               # 扩展图标
+│   └── *.md                  # 扩展文档
 ├── src/                      # 模块化核心组件
 │   ├── AsulLexer.h/cpp       # 词法分析器（TokenType、Token、Lexer）
 │   ├── AsulParser.h/cpp      # 递归下降语法分析器
@@ -211,6 +218,63 @@ make -j$(nproc)
 
 #### 异步脚本注意事项
 若脚本使用 `then/catch`、`go` 等异步特性，宿主程序需在脚本执行后调用 `runEventLoopUntilIdle()` 处理事件循环任务（CLI 已在 `Main.cpp` 中内置该逻辑）。
+
+---
+
+## 🎨 VSCode 语法高亮插件
+
+ALang 提供官方 Visual Studio Code 语法高亮扩展，为 `.alang` 文件提供完整的语法着色和编辑器支持。
+
+### 特性
+
+- **完整语法高亮**：支持所有 ALang 语言特性
+  - 关键字（let、var、const、function、class、async、await 等）
+  - 控制流语句（if、while、for、foreach、switch 等）
+  - 特殊运算符（`=~=`、`?.`、`??`、`<-`、`=>` 等）
+  - 字符串插值和模板字面量
+  - 多种注释风格（`//`、`/* */`、`#`、`"""`、`'''`）
+
+- **编辑器功能**：
+  - 括号匹配和自动闭合
+  - 注释切换（Ctrl+/）
+  - 代码折叠支持
+  - 智能缩进
+
+### 安装
+
+**方法 1：从源码安装（开发）**
+
+```bash
+# 复制扩展到 VSCode 扩展目录
+# Windows:
+xcopy /E /I /Y vscode-extension "%USERPROFILE%\.vscode\extensions\alang-language-support-0.1.0"
+
+# macOS/Linux:
+mkdir -p ~/.vscode/extensions/alang-language-support-0.1.0
+cp -r vscode-extension/* ~/.vscode/extensions/alang-language-support-0.1.0/
+
+# 重新加载 VSCode 窗口
+```
+
+**方法 2：打包并安装**
+
+```bash
+cd vscode-extension
+npm install -g vsce
+vsce package
+code --install-extension alang-language-support-0.1.0.vsix
+```
+
+### 使用
+
+安装后，VSCode 会自动为 `.alang` 文件应用语法高亮。打开任何 ALang 脚本文件即可享受完整的编辑器支持。
+
+### 文档
+
+- [安装指南](vscode-extension/INSTALL.md)
+- [语法参考](vscode-extension/SYNTAX-REFERENCE.md)
+- [开发者指南](vscode-extension/DEVELOPER.md)
+- [示例文件](vscode-extension/examples/)
 
 ---
 
@@ -477,55 +541,6 @@ go task().then([](res) { println("异步结果：", res); });
 
 // 事件循环（宿主需调用 runEventLoopUntilIdle()）
 ```
-
-### 网络与 HTTP/2
-AsulLang 的 `std.network` 模块现已支持现代 HTTP/2 协议，基于 libcurl 提供高效的网络通信能力。
-
-#### HTTP/2 请求示例
-```javascript
-import std.network;
-
-// HTTP/2 默认启用
-let res = await std.network.fetch("https://example.com");
-println("状态码：", res.status);
-println("协议版本：", res.version);  // "HTTP/2" 或 "HTTP/1.1"
-
-let body = await res.text();
-println("响应内容：", body);
-```
-
-#### POST 请求与自定义头
-```javascript
-let res = await std.network.fetch("https://api.example.com/data", {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer token123"
-    },
-    body: '{"key": "value"}'
-});
-
-let data = await res.json();
-println("返回数据：", data);
-```
-
-#### 强制使用 HTTP/1.1
-```javascript
-let res = await std.network.fetch("https://example.com", {
-    http2: false  // 禁用 HTTP/2，使用 HTTP/1.1
-});
-```
-
-#### HTTP/2 特性
-- ✅ 多路复用（Multiplexing）
-- ✅ 头部压缩（HPACK）
-- ✅ 自动协议协商（ALPN）
-- ✅ 支持所有 HTTP 方法（GET/POST/PUT/DELETE/PATCH/HEAD）
-- ✅ 自定义请求头
-- ✅ 重定向处理
-- ✅ 向后兼容 HTTP/1.1
-
-详细文档请参阅 [HTTP2_README.md](HTTP2_README.md)
 
 ### 元编程
 #### eval 动态执行
