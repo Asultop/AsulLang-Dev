@@ -25,12 +25,9 @@
     "build": "./build.sh full",
     "build:quick": "npm run compile && vsce package -o build/"
   },
-  "dependencies": {
-    "vscode-languageclient": "^8.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^18.0.0",
-    "@types/vscode": "^1.60.0",
     "typescript": "^5.0.0",
     "@vscode/vsce": "^2.22.0"
   },
