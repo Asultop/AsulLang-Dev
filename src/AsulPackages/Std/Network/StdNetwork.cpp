@@ -11,7 +11,11 @@
     
     // Windows compatibility typedefs
     typedef int socklen_t;
-    // ssize_t is already defined in MinGW
+    #ifdef _MSC_VER
+        // MSVC doesn't define ssize_t (MinGW does)
+        #include <BaseTsd.h>
+        typedef SSIZE_T ssize_t;
+    #endif
     #define close closesocket
     #define read(fd, buf, len) recv(fd, (char*)(buf), len, 0)
     #define write(fd, buf, len) send(fd, (const char*)(buf), (int)(len), 0)

@@ -56,6 +56,9 @@ add_executable(alang-lsp
   src/AsulPackages/AsulPackages.cpp
 )
 target_include_directories(alang-lsp PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
+if(WIN32)
+  target_compile_definitions(alang-lsp PRIVATE NOMINMAX)
+endif()
 
 option(USE_READLINE "Enable readline support for REPL if available" ON)
 
@@ -109,15 +112,20 @@ endif()
 if(WIN32)
   # Link Winsock for Windows networking support
   target_link_libraries(alang PRIVATE ws2_32)
-  target_compile_definitions(alang PRIVATE _WIN32_WINNT=0x0600)
-  # Ensure UTF-8 source and execution charset for proper Unicode handling
-  target_compile_options(alang PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
-  # Static linking on Windows to avoid DLL dependencies (libstdc++, libgcc, libwinpthread)
-  target_link_options(alang PRIVATE -static -static-libgcc -static-libstdc++)
-  
-  # Test runner settings for Windows
-  target_compile_options(test_runner PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
-  target_link_options(test_runner PRIVATE -static -static-libgcc -static-libstdc++)
+  target_compile_definitions(alang PRIVATE _WIN32_WINNT=0x0600 NOMINMAX)
+
+  if(MSVC)
+    # MSVC: UTF-8 source/exec charset and static CRT
+    target_compile_options(alang PRIVATE /utf-8)
+    target_compile_options(test_runner PRIVATE /utf-8)
+    target_compile_options(alang-lsp PRIVATE /utf-8)
+  else()
+    # MinGW/GCC: UTF-8 source/exec charset and static linking
+    target_compile_options(alang PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+    target_link_options(alang PRIVATE -static -static-libgcc -static-libstdc++)
+    target_compile_options(test_runner PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+    target_link_options(test_runner PRIVATE -static -static-libgcc -static-libstdc++)
+  endif()
 else()
   # Link dl library for FFI on Unix systems
   target_link_libraries(alang PRIVATE dl)
@@ -191,6 +199,10 @@ if(WIN32)
     RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug
   )
   set_target_properties(test_runner PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug
+  )
+  set_target_properties(alang-lsp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Release
     RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Debug
   )
