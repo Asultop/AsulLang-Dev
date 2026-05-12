@@ -60,6 +60,7 @@ private:
 	StmtPtr statement();
 	StmtPtr forStatement();
 	StmtPtr forEachStatement();
+	StmtPtr forOfStatement();
 	StmtPtr switchStatement();
 	StmtPtr matchStatement();
 	StmtPtr returnStatement();

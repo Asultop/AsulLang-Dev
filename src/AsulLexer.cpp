@@ -127,7 +127,7 @@ void Lexer::identifier() {
 		{"let", TokenType::Let}, {"var", TokenType::Var}, {"const", TokenType::Const},
 		{"function", TokenType::Function}, {"fn", TokenType::Function}, {"return", TokenType::Return},
 		{"if", TokenType::If}, {"else", TokenType::Else}, {"while", TokenType::While}, {"do", TokenType::Do},
-		{"for", TokenType::For}, {"foreach", TokenType::ForEach}, {"in", TokenType::In}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
+		{"for", TokenType::For}, {"foreach", TokenType::ForEach}, {"in", TokenType::In}, {"of", TokenType::Of}, {"break", TokenType::Break}, {"continue", TokenType::Continue},
 		{"switch", TokenType::Switch}, {"case", TokenType::Case}, {"default", TokenType::Default},
 		{"class", TokenType::Class}, {"extends", TokenType::Extends}, {"new", TokenType::New},
 		{"true", TokenType::True}, {"false", TokenType::False}, {"null", TokenType::Null},
@@ -138,6 +138,9 @@ void Lexer::identifier() {
 		{"interface", TokenType::Interface},
 		{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As}, {"export", TokenType::Export},
 		{"static", TokenType::Static},
+		{"public", TokenType::Public},
+		{"private", TokenType::Private},
+		{"protected", TokenType::Protected},
 		{"match", TokenType::Match}, {"yield", TokenType::Yield}, {"super", TokenType::Super},
 	};
 	auto it = keywords.find(text);

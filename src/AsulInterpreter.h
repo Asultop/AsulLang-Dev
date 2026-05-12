@@ -1470,6 +1470,59 @@ public:
 			}
 			return;
 		}
+		if (auto fo = std::dynamic_pointer_cast<ForOfStmt>(stmt)) {
+			// for (varName of iterable) body
+			Value iterableValue = evaluate(fo->iterable);
+
+			// 创建新的作用域用于循环变量
+			auto loopEnv = std::make_shared<Environment>(env);
+			loopEnv->define(fo->varName, Value{std::monostate{}});
+
+			// 根据 iterable 类型进行迭代 (与 ForEachStmt 相同)
+			if (auto arr = std::get_if<std::shared_ptr<std::vector<Value>>>(&iterableValue)) {
+				// 数组：遍历每个元素
+				for (const auto& elem : **arr) {
+					loopEnv->assign(fo->varName, elem);
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fo->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else if (auto obj = std::get_if<std::shared_ptr<std::unordered_map<std::string,Value>>>(&iterableValue)) {
+				// 对象：遍历每个键
+				for (const auto& [key, value] : **obj) {
+					loopEnv->assign(fo->varName, Value{key});
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fo->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else if (auto str = std::get_if<std::string>(&iterableValue)) {
+				// 字符串：遍历每个字符
+				for (char ch : *str) {
+					loopEnv->assign(fo->varName, Value{std::string(1, ch)});
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fo->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else {
+				throw std::runtime_error("for-of requires an iterable (array, object, or string)");
+			}
+			return;
+		}
 		if (auto sw = std::dynamic_pointer_cast<SwitchStmt>(stmt)) {
 			// switch (expr) { case val: ... default: ... }
 			Value switchValue = evaluate(sw->expr);
@@ -1561,6 +1614,14 @@ public:
 				exceptionCaught = true;
 				auto local = std::make_shared<Environment>(env);
 				local->define(tc->catchName, ex.value);
+				// 检查条件 catch：catch e if condition
+				if (tc->catchCondition) {
+					Value condVal = evaluate(tc->catchCondition);
+					if (!isTruthy(condVal)) {
+						// 条件不满足，重新抛出异常
+						throw;
+					}
+				}
 				// 在新的局部环境中执行 catch 块
 				if (auto block = std::dynamic_pointer_cast<BlockStmt>(tc->catchBlock)) {
 					executeBlock(block->statements, local);
@@ -1573,6 +1634,14 @@ public:
 				auto local = std::make_shared<Environment>(env);
 				Value errVal = buildExceptionValue(ex.what());
 				local->define(tc->catchName, errVal);
+				// 检查条件 catch：catch e if condition
+				if (tc->catchCondition) {
+					Value condVal = evaluate(tc->catchCondition);
+					if (!isTruthy(condVal)) {
+						// 条件不满足，重新抛出异常
+						throw;
+					}
+				}
 				if (auto block = std::dynamic_pointer_cast<BlockStmt>(tc->catchBlock)) {
 					executeBlock(block->statements, local);
 				} else {
@@ -2234,6 +2303,76 @@ public:
 					}
 				}
 				return Value{std::monostate{}};
+			}
+		}
+		// 反射 API：获取实例的方法列表
+		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
+			if (*pins && (*pins)->klass) {
+				if (name == "getMethods") {
+					auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto inst = *pins;
+					fn->builtin = [inst](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+						auto arr = std::make_shared<Array>();
+						if (inst && inst->klass) {
+							for (auto& [mname, mfn] : inst->klass->methods) {
+								if (mfn) arr->push_back(Value{mname});
+							}
+						}
+						return Value{arr};
+					};
+					return fn;
+				}
+				if (name == "getFields") {
+					auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto inst = *pins;
+					fn->builtin = [inst](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+						auto arr = std::make_shared<Array>();
+						if (inst) {
+							for (auto& [fname, fval] : inst->fields) {
+								arr->push_back(Value{fname});
+							}
+						}
+						return Value{arr};
+					};
+					return fn;
+				}
+				if (name == "getGetters") {
+					auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto inst = *pins;
+					fn->builtin = [inst](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+						auto arr = std::make_shared<Array>();
+						if (inst && inst->klass) {
+							for (auto& [gname, gfn] : inst->klass->getters) {
+								arr->push_back(Value{gname});
+							}
+						}
+						return Value{arr};
+					};
+					return fn;
+				}
+				if (name == "getSetters") {
+					auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto inst = *pins;
+					fn->builtin = [inst](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+						auto arr = std::make_shared<Array>();
+						if (inst && inst->klass) {
+							for (auto& [sname, sfn] : inst->klass->setters) {
+								arr->push_back(Value{sname});
+							}
+						}
+						return Value{arr};
+					};
+					return fn;
+				}
+				if (name == "getStaticMethods") {
+					auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto inst = *pins;
+					fn->builtin = [inst](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+						auto arr = std::make_shared<Array>();
+						if (inst && inst->klass) {
+							for (auto& [sname, sfn] : inst->klass->staticMethods) {
+								arr->push_back(Value{sname});
+							}
+						}
+						return Value{arr};
+					};
+					return fn;
+				}
 			}
 		}
 		// Class (static methods)

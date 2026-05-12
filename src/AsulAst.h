@@ -101,14 +101,15 @@ struct IfStmt : Stmt { ExprPtr cond; StmtPtr thenB; StmtPtr elseB; IfStmt(ExprPt
 struct WhileStmt : Stmt { ExprPtr cond; StmtPtr body; WhileStmt(ExprPtr c, StmtPtr b, int l=0, int col=1, int len=1): cond(std::move(c)), body(std::move(b)){ line=l; column=col; length=len; } };
 struct DoWhileStmt : Stmt { ExprPtr cond; StmtPtr body; DoWhileStmt(ExprPtr c, StmtPtr b, int l=0, int col=1, int len=1): cond(std::move(c)), body(std::move(b)){ line=l; column=col; length=len; } };
 struct ReturnStmt : Stmt { Token keyword; ExprPtr value; ReturnStmt(Token k, ExprPtr v, int l=0, int c=1, int len=1): keyword(std::move(k)), value(std::move(v)){ line=l; column=c; length=len; } };
-struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; bool isGenerator{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; bool isGetter{false}; bool isSetter{false}; std::vector<ExprPtr> decorators; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, bool g=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false, int l=0, int c=1, int len=1, std::vector<ExprPtr> decs = {}, bool getter=false, bool setter=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), isGenerator(g), returnType(std::move(r)), isStatic(s), isExported(exported), isGetter(getter), isSetter(setter), decorators(std::move(decs)){ line=l; column=c; length=len; } };
-struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; bool isExported{false}; };
+struct FunctionStmt : Stmt { std::string name; std::vector<Param> params; StmtPtr body; bool isAsync{false}; bool isGenerator{false}; std::optional<std::string> returnType; bool isStatic{false}; bool isExported{false}; bool isGetter{false}; bool isSetter{false}; bool isPublic{true}; bool isPrivate{false}; bool isProtected{false}; std::vector<ExprPtr> decorators; FunctionStmt(std::string n, std::vector<Param> p, StmtPtr b, bool a=false, bool g=false, std::optional<std::string> r = std::nullopt, bool s=false, bool exported=false, int l=0, int c=1, int len=1, std::vector<ExprPtr> decs = {}, bool getter=false, bool setter=false, bool pub=true, bool priv=false, bool prot=false): name(std::move(n)), params(std::move(p)), body(std::move(b)), isAsync(a), isGenerator(g), returnType(std::move(r)), isStatic(s), isExported(exported), isGetter(getter), isSetter(setter), isPublic(pub), isPrivate(priv), isProtected(prot), decorators(std::move(decs)){ line=l; column=c; length=len; } };
+struct ClassStmt : Stmt { std::string name; std::vector<std::string> superNames; std::vector<std::shared_ptr<FunctionStmt>> methods; bool isExported{false}; bool isPublic{true}; bool isPrivate{false}; bool isProtected{false}; };
 struct ExtendStmt : Stmt { std::string name; std::vector<std::shared_ptr<FunctionStmt>> methods; };
 struct InterfaceStmt : Stmt { std::string name; std::vector<std::string> methodNames; bool isExported{false}; };
 struct BreakStmt : Stmt {};
 struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
 struct ForEachStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForEachStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
+struct ForOfStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForOfStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
 struct SwitchStmt : Stmt {
 	struct CaseClause {
 		ExprPtr value; // null for default case
@@ -123,10 +124,11 @@ struct ThrowStmt : Stmt { ExprPtr value; explicit ThrowStmt(ExprPtr v): value(st
 struct TryCatchStmt : Stmt {
 	StmtPtr tryBlock;
 	std::string catchName;
+	ExprPtr catchCondition; // optional guard condition: catch e if condition
 	StmtPtr catchBlock;
 	StmtPtr finallyBlock; // optional finally block
-	TryCatchStmt(StmtPtr t, std::string n, StmtPtr c, StmtPtr f = nullptr)
-		: tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)), finallyBlock(std::move(f)) {}
+	TryCatchStmt(StmtPtr t, std::string n, StmtPtr c, StmtPtr f = nullptr, ExprPtr cond = nullptr)
+		: tryBlock(std::move(t)), catchName(std::move(n)), catchBlock(std::move(c)), finallyBlock(std::move(f)), catchCondition(std::move(cond)) {}
 };
 struct EmptyStmt : Stmt {};
 struct ImportStmt : Stmt {

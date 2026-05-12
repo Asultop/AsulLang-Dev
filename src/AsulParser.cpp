@@ -51,6 +51,7 @@ static bool isPropertyNameToken(TokenType type) {
 		case TokenType::For:
 		case TokenType::ForEach:
 		case TokenType::In:
+		case TokenType::Of:
 		case TokenType::Break:
 		case TokenType::Continue:
 		case TokenType::Switch:
@@ -450,6 +451,21 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			(void)match({TokenType::Function});
 			bool isGenerator = match({TokenType::Star});
 
+			// Parse access modifiers: public / private / protected
+			bool isPublic = true;
+			bool isPrivate = false;
+			bool isProtected = false;
+			if (match({TokenType::Public})) {
+				isPublic = true; isPrivate = false; isProtected = false;
+			} else if (match({TokenType::Private})) {
+				isPublic = false; isPrivate = true; isProtected = false;
+			} else if (match({TokenType::Protected})) {
+				isPublic = false; isPrivate = false; isProtected = true;
+			}
+
+			// After access modifiers, consume optional function keyword
+			(void)match({TokenType::Function});
+
 			// Check for getter/setter: get name() / set name(value)
 			bool isGetter = false;
 			bool isSetter = false;
@@ -477,7 +493,7 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			std::optional<std::string> retType = std::nullopt;
 			if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "':' 后缺少返回类型名称").lexeme;
 			auto body = statement();
-			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType, isStatic, false, 0, 1, 1, decorators, isGetter, isSetter));
+			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType, isStatic, false, 0, 1, 1, decorators, isGetter, isSetter, isPublic, isPrivate, isProtected));
 		}
 		consume(TokenType::RightBrace, "类主体后缺少 '}'");
 		// 可选分号：class Name { ... };
@@ -572,12 +588,14 @@ StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
 			}
 			
 			params.emplace_back(pname, ptype, isRest, defaultValue);
-			
+
 			// Rest parameter must be last
 			if (isRest && !check(TokenType::RightParen)) {
 				error("剩余参数必须在最后");
 			}
 		} while (match({TokenType::Comma}) && !check(TokenType::RightParen));
+		// 尾逗号支持：允许函数参数最后有逗号
+		(void)match({TokenType::Comma});
 	}
 	consume(TokenType::RightParen, "缺少 ')'");
 	// optional return type (accept ':' or '->')
@@ -616,7 +634,27 @@ StmtPtr Parser::statement() {
 	if (match({TokenType::If})) return ifStatement();
 	if (match({TokenType::While})) return whileStatement();
 	if (match({TokenType::Do})) return doWhileStatement();
-	if (match({TokenType::For})) return forStatement();
+	if (match({TokenType::For})) {
+		// Check if this is a for-of loop: for (var of iterable)
+		// Look ahead to see if we have: identifier of ...
+		size_t savedCurrent = current;
+		consume(TokenType::LeftParen, "'for' 后缺少 '('");
+		bool isForOf = false;
+		if (match({TokenType::Let, TokenType::Var, TokenType::Const}) || check(TokenType::Identifier)) {
+			if (!check(TokenType::Identifier)) advance(); // consume keyword
+			if (check(TokenType::Identifier)) {
+				advance(); // consume identifier
+				if (match({TokenType::Of})) {
+					isForOf = true;
+				}
+			}
+		}
+		current = savedCurrent; // restore position
+		if (isForOf) {
+			return forOfStatement();
+		}
+		return forStatement();
+	}
 	if (match({TokenType::ForEach})) return forEachStatement();
 	if (match({TokenType::Switch})) return switchStatement();
 	if (match({TokenType::Match})) return matchStatement();
@@ -631,13 +669,18 @@ StmtPtr Parser::statement() {
 		consume(TokenType::LeftParen, "catch 后缺少 '('");
 		auto name = consume(TokenType::Identifier, "catch 中缺少标识符").lexeme;
 		consume(TokenType::RightParen, "catch 参数后缺少 ')'");
+		// Optional guard condition: catch e if condition
+		ExprPtr catchCondition = nullptr;
+		if (match({TokenType::If})) {
+			catchCondition = expression();
+		}
 		auto catchB = statement();
 		// Optional finally block
 		StmtPtr finallyB = nullptr;
 		if (match({TokenType::Finally})) {
 			finallyB = statement();
 		}
-		return std::make_shared<TryCatchStmt>(tryB, name, catchB, finallyB);
+		return std::make_shared<TryCatchStmt>(tryB, name, catchB, finallyB, catchCondition);
 	}
 	if (match({TokenType::Go})) { auto expr = expression(); consume(TokenType::Semicolon, "go 调用后缺少 ';'"); return std::make_shared<GoStmt>(expr); }
 	if (match({TokenType::Break})) { consume(TokenType::Semicolon, "break 后缺少 ';'"); return std::make_shared<BreakStmt>(); }
@@ -669,19 +712,38 @@ StmtPtr Parser::forStatement() {
 StmtPtr Parser::forEachStatement() {
 	// foreach (varName in iterable) body
 	consume(TokenType::LeftParen, "'foreach' 后缺少 '('");
-	
+
 	if (!check(TokenType::Identifier)) {
 		error("foreach 中缺少变量名");
 	}
 	std::string varName = advance().lexeme;
-	
+
 	consume(TokenType::In, "foreach 变量名后缺少 'in'");
-	
+
 	ExprPtr iterable = expression();
 	consume(TokenType::RightParen, "foreach 子句后缺少 ')'");
 	auto body = statement();
-	
+
 	return std::make_shared<ForEachStmt>(varName, iterable, body);
+}
+
+StmtPtr Parser::forOfStatement() {
+	// for (varName of iterable) body - ES6 style for-of
+	// 注意：这里 'for' 已经被消费了，需要处理 'of' 关键字
+	consume(TokenType::LeftParen, "'for' 后缺少 '('");
+
+	if (!check(TokenType::Identifier)) {
+		error("for-of 循环中缺少变量名");
+	}
+	std::string varName = advance().lexeme;
+
+	consume(TokenType::Of, "for-of 循环变量名后缺少 'of'");
+
+	ExprPtr iterable = expression();
+	consume(TokenType::RightParen, "for-of 子句后缺少 ')'");
+	auto body = statement();
+
+	return std::make_shared<ForOfStmt>(varName, iterable, body);
 }
 
 StmtPtr Parser::switchStatement() {
@@ -1154,6 +1216,8 @@ ExprPtr Parser::finishCall(ExprPtr callee) {
 	std::vector<ExprPtr> args;
 	if (!check(TokenType::RightParen)) {
 		do { args.push_back(expression()); } while (match({TokenType::Comma}) && !check(TokenType::RightParen));
+		// 尾逗号支持：允许参数列表最后有逗号
+		(void)match({TokenType::Comma});
 	}
 	Token rp = consume(TokenType::RightParen, "参数后缺少 ')'");
 	return std::make_shared<CallExpr>(callee, args, rp.line, rp.column, std::max(1, rp.length));
@@ -1309,6 +1373,8 @@ ExprPtr Parser::primary() {
 					elems.push_back(expression());
 				}
 			} while (match({TokenType::Comma}) && !check(TokenType::RightBracket));
+			// 尾逗号支持：允许数组字面量最后有逗号
+			(void)match({TokenType::Comma});
 		}
 		consume(TokenType::RightBracket, "数组字面量后缺少 ']'");
 		return std::make_shared<ArrayLiteralExpr>(elems);
@@ -1337,6 +1403,8 @@ ExprPtr Parser::primary() {
 				}
 				props.push_back(std::move(p));
 			} while (match({TokenType::Comma}) && !check(TokenType::RightBrace));
+			// 尾逗号支持：允许对象字面量最后有逗号
+			(void)match({TokenType::Comma});
 		}
 		consume(TokenType::RightBrace, "对象字面量后缺少 '}'");
 		return std::make_shared<ObjectLiteralExpr>(props);
