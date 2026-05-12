@@ -134,6 +134,8 @@ function riskyOperation() {
 
 try {
     riskyOperation();
+} catch (e) {
+    println("  捕获异常: ${e}");
 } finally {
     println("  清理资源（无论是否异常）");
 }

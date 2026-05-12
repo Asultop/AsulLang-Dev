@@ -159,7 +159,13 @@ std::vector<std::string> funcFiles = {
     "destructuring_test.alang",
     "optional_chaining_test.alang",
     "pattern_matching_test.alang",
-    "yield_test.alang"
+    "yield_test.alang",
+    "exception_handling_complete.alang",
+    "match_basics.alang",
+    "generator_tutorial.alang",
+    "getter_setter_example.alang",
+    "super_inheritance.alang",
+    "for_of_example.alang"
 };
 
 // Run a command and return exit code

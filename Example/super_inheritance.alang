@@ -46,9 +46,9 @@ dog.speak();
 println("  ${dog.describe()}");
 
 // -------------------------------------------------------
-// 2) 多层继承中的 super
+// 2) super 调用父类 constructor 与方法
 // -------------------------------------------------------
-println("\n--- 2) 多层继承 ---");
+println("\n--- 2) super 调用父类 constructor ---");
 
 class Shape {
     function constructor(color) {
@@ -72,27 +72,14 @@ class Circle <- Shape {
     }
 
     function area() {
-        // 近似 pi * r^2
         let pi = 3.14159;
         return pi * this.radius * this.radius;
     }
 }
 
-class ColoredCircle <- Circle {
-    function constructor(color, radius, opacity) {
-        super.constructor(color, radius);
-        this.opacity = opacity;
-    }
-
-    function info() {
-        let base = super.info();
-        return base + ", 透明度: " + this.opacity;
-    }
-}
-
-let cc = new ColoredCircle("红色", 5, 0.8);
-println("  ${cc.info()}");
-println("  面积: ${cc.area()}");
+let c = new Circle("红色", 5);
+println("  ${c.info()}");
+println("  面积: ${c.area()}");
 
 // -------------------------------------------------------
 // 3) 多继承中的 super：按声明顺序查找
@@ -157,9 +144,9 @@ println("  ${child.greet()}");
 println("  ${child.formalGreet()}");
 
 // -------------------------------------------------------
-// 5) super 调用父类 constructor 链
+// 5) super 与 extends 扩展配合
 // -------------------------------------------------------
-println("\n--- 5) constructor 链式调用 ---");
+println("\n--- 5) super 与 extends ---");
 
 class Vehicle {
     function constructor(make, year) {
@@ -184,19 +171,17 @@ class Car <- Vehicle {
     }
 }
 
-class SportsCar <- Car {
-    function constructor(make, year, doors, topSpeed) {
-        super.constructor(make, year, doors);
-        this.topSpeed = topSpeed;
-    }
+let car = new Car("丰田", 2024, 4);
+println("  ${car.details()}");
 
-    function details() {
-        let base = super.details();
-        return base + ", 最高时速: " + this.topSpeed + "km/h";
+// extends 中使用 super
+extends Car {
+    function summary() {
+        let d = super.details();
+        return "[车辆] " + d;
     }
 }
 
-let sc = new SportsCar("法拉利", 2024, 2, 350);
-println("  ${sc.details()}");
+println("  ${car.summary()}");
 
 println("\n=== super 关键字教程完成 ===");

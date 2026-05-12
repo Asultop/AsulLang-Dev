@@ -104,6 +104,12 @@ func_files=(
     "operator_overload_test.alang"
     "ffi_test.alang"
     "events_example.alang"
+    "exception_handling_complete.alang"
+    "match_basics.alang"
+    "generator_tutorial.alang"
+    "getter_setter_example.alang"
+    "super_inheritance.alang"
+    "for_of_example.alang"
 )
 
 # Counter for passed/failed tests
