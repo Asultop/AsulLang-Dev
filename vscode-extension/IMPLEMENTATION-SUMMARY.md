@@ -1,4 +1,4 @@
-# Implementation Summary - VSCode Extension v0.2.0
+# Implementation Summary - VSCode Extension v0.3.1
 
 ## User Request (Comment #3631945536)
 
@@ -178,14 +178,14 @@ let result = calculateSum(5, 10);
                │ (JSON-RPC over IPC)
                │
 ┌──────────────▼──────────────────────────────────┐
-│  server/src/server.ts                           │
+│  server/src/ (LSP 模块化)                        │
 │                                                  │
-│  Features:                                       │
-│  ├─ Document Management                         │
-│  ├─ Symbol Table (functions, classes, vars)     │
-│  ├─ Diagnostics Provider (syntax errors)        │
-│  ├─ Definition Provider (go-to-definition)      │
-│  └─ Completion Provider (auto-complete)         │
+│  server.ts        - 主入口与连接管理             │
+│  settings.ts      - 扩展配置管理                 │
+│  symbols.ts       - 符号表与符号解析             │
+│  validation.ts    - 语法验证与诊断               │
+│  completion.ts    - 自动补全提供者               │
+│  definition.ts    - 转到定义提供者               │
 └─────────────────────────────────────────────────┘
 
 Color Theme (Independent)
@@ -224,11 +224,11 @@ Outputs:
 ### Step 3: Install Extension
 ```bash
 # Linux/macOS
-mkdir -p ~/.vscode/extensions/alang-language-support-0.2.0
-cp -r * ~/.vscode/extensions/alang-language-support-0.2.0/
+mkdir -p ~/.vscode/extensions/alang-language-support-0.3.1
+cp -r * ~/.vscode/extensions/alang-language-support-0.3.1/
 
 # Windows
-xcopy /E /I /Y . "%USERPROFILE%\.vscode\extensions\alang-language-support-0.2.0"
+xcopy /E /I /Y . "%USERPROFILE%\.vscode\extensions\alang-language-support-0.3.1"
 ```
 
 ### Step 4: Reload VSCode
@@ -330,7 +330,15 @@ if (doubleQuotes % 2 !== 0) {
 
 ## Version History
 
-### v0.2.0 (Current)
+### v0.3.1 (Current)
+- ✅ LSP 模块化重构（settings.ts, symbols.ts, validation.ts, completion.ts, definition.ts）
+- ✅ 新语言特性支持（match 模式匹配、装饰器、解构赋值、yield/generator、运算符重载等）
+- ✅ 新标准库包支持（std.collections, std.array, std.log, std.test, std.ffi, std.uuid, std.events, std.encoding）
+- ✅ 包管理重构（os/std.os 合并、url/std.network 合并）
+- ✅ 空值合并（??）、可选链（?.）、逻辑赋值（??=, &&=, ||=）语法高亮
+- ✅ 展开运算符（...spread）语法高亮
+
+### v0.2.0
 - ✅ Color theme with special operator highlighting
 - ✅ Language server with syntax checking
 - ✅ Go to definition
@@ -371,5 +379,9 @@ Planned features:
 1. ✅ 语法检测 (Syntax Checking) - LSP diagnostics
 2. ✅ 默认颜色渲染 (Default Colors) - Complete color theme
 3. ✅ 转到定义 (Go to Definition) - Symbol navigation
+4. ✅ LSP 模块化重构 - settings/symbols/validation/completion/definition 模块拆分
+5. ✅ 新语言特性支持 - match、装饰器、解构赋值、yield、运算符重载等
+6. ✅ 新标准库包支持 - collections、array、log、test、ffi、uuid、events、encoding
+7. ✅ 包管理重构 - os/std.os 合并、url/std.network 合并
 
-**Production Ready** - v0.2.0
+**Production Ready** - v0.3.1

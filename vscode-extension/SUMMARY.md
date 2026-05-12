@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Successfully implemented a complete Visual Studio Code syntax highlighting extension for the ALang scripting language, providing comprehensive editor support based on the Token Provider defined in `src/AsulLexer.h`.
+Successfully implemented a complete Visual Studio Code syntax highlighting extension for the ALang scripting language, providing comprehensive editor support based on the Token Provider defined in `src/AsulLexer.h`. v0.3.1 版本新增 LSP 模块化重构、新语言特性支持、新标准库包支持以及包管理重构。
 
 ## Deliverables
 
@@ -126,6 +126,7 @@ The extension implements syntax highlighting for all 57+ token types:
 - Assignment: `Equal`, `PlusEqual`, `MinusEqual`, `StarEqual`, `SlashEqual`, `PercentEqual`
 - Increment: `PlusPlus`, `MinusMinus`
 - Special: `MatchInterface` (=~=), `QuestionDot` (?.), `QuestionQuestion` (??), `QuestionQuestionEqual`, `AndAndEqual`, `OrOrEqual`, `LeftArrow` (<-), `Arrow` (->), `Ellipsis` (...), `At` (@), `Question`
+- Operator Overload: `__add__`, `__sub__`, `__mul__`, `__div__`, `__mod__`, `__eq__`, `__ne__`, `__lt__`, `__gt__`, `__le__`, `__ge__`, `__and__`, `__or__`, `__xor__`, `__shl__`, `__shr__`
 
 #### Literals (3 types)
 - `Number` - All formats (decimal, float, scientific, hex, binary, octal)
@@ -158,6 +159,36 @@ The extension implements syntax highlighting for all 57+ token types:
 ✅ Developer guide  
 ✅ Quick start guide  
 ✅ Examples and demos  
+
+### LSP 模块化重构 (v0.3.1)
+✅ settings.ts - 扩展配置管理
+✅ symbols.ts - 符号表与符号解析
+✅ validation.ts - 语法验证与诊断
+✅ completion.ts - 自动补全提供者
+✅ definition.ts - 转到定义提供者
+
+### 新语言特性支持 (v0.3.1)
+✅ match 模式匹配（case pattern => body，守卫子句 if guard）
+✅ 解构赋值（let {a, b} = obj; let [x, y] = arr;）
+✅ @decorator 装饰器（函数和类，多个叠加）
+✅ yield/generator（function* 声明生成器）
+✅ 运算符重载（__add__, __sub__ 等魔术方法）
+✅ 空值合并（??）、可选链（?.）、逻辑赋值（??=, &&=, ||=）
+✅ 展开运算符（...spread）
+
+### 新标准库包支持 (v0.3.1)
+✅ std.collections: map, set, deque, stack, keysSorted
+✅ std.array: flat, flatMap, unique, chunk, groupBy, zip, diff
+✅ std.log: setLevel, debug, info, warn, error, json
+✅ std.test: assert, assertEqual, assertNotEqual, getStats, pass, fail, printSummary
+✅ std.ffi: dlopen, dlsym, dlclose, call
+✅ std.uuid: v4
+✅ std.events: connect; AsulObject (on, off, emit, receive)
+✅ std.encoding: Base64, Base64URL, Hex, URL encode/decode
+
+### 包管理重构 (v0.3.1)
+✅ os 与 std.os 合并为统一接口
+✅ url 与 std.network 合并为统一接口
 
 ### Quality Assurance
 ✅ All JSON files validated  
@@ -213,8 +244,10 @@ The extension implements syntax highlighting for all 57+ token types:
 - **Total Lines of Code**: ~1,500 (JSON/config)
 - **Total Documentation**: ~32,000 words (6 markdown files)
 - **Total Example Code**: ~450 lines (ALang examples)
-- **Token Type Coverage**: 100% (all 57+ tokens from AsulLexer.h)
+- **Token Type Coverage**: 100% (all 57+ tokens from AsulLexer.h，含运算符重载魔术方法)
 - **Comment Style Coverage**: 100% (6 comment styles supported)
+- **LSP 模块数**: 5 (settings, symbols, validation, completion, definition)
+- **新增标准库包**: 8 (collections, array, log, test, ffi, uuid, events, encoding)
 
 ## Technical Details
 
@@ -237,8 +270,8 @@ The extension implements syntax highlighting for all 57+ token types:
 Potential improvements documented in DEVELOPER.md:
 
 1. **Language Server Features**
-   - IntelliSense/autocomplete
-   - Go to definition
+   - ~~IntelliSense/autocomplete~~ ✅ (v0.2.0)
+   - ~~Go to definition~~ ✅ (v0.2.0)
    - Find all references
    - Rename symbol
    - Hover documentation
@@ -264,12 +297,16 @@ The VSCode syntax highlighting extension is **complete and ready for use**. It p
 4. ✅ **User-Friendly** - Multiple installation methods with clear instructions
 5. ✅ **Developer-Friendly** - Complete developer guide for contributions
 6. ✅ **Production-Ready** - Can be packaged and published to VS Marketplace
+7. ✅ **Modular LSP Architecture** - 5 dedicated modules for maintainability
+8. ✅ **New Language Features** - match, decorators, destructuring, generators, operator overloading
+9. ✅ **Extended Standard Library** - 8 new packages with full syntax support
+10. ✅ **Package Management Refactored** - Unified os/network package interfaces
 
 The implementation successfully addresses the requirement: "实现VSCode语法高亮插件，根据Token Provider细化区分" (Implement VSCode syntax highlighting plugin, refine and distinguish based on Token Provider).
 
 ---
 
 **Status**: ✅ COMPLETE  
-**Version**: 0.1.0  
+**Version**: 0.3.1  
 **Ready for**: Production Use  
 **Next Step**: Optional - Publish to VS Marketplace

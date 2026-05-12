@@ -66,6 +66,13 @@ ALang 是一款基于 C++17 开发的轻量脚本语言解释器/运行时，专
 - ⚡ **异步编程**：`async/await`、`Promise`、`then/catch`、事件循环
 - 🔍 **元编程能力**：`eval(string)` 动态执行、`quote(string)` Token 级源码操作
 - 📥 **模块系统**：文件导入与包导入（`import`/`from`），支持去重机制
+- 🎯 **模式匹配**：`match` 表达式（`case pattern => body`），支持守卫子句 `if guard`
+- 🧩 **解构赋值**：`let {a, b} = obj;` 对象解构、`let [x, y] = arr;` 数组解构
+- 🏷️ **装饰器**：`@decorator` 支持函数和类，支持多个叠加
+- ⚖️ **运算符重载**：通过魔术方法（`__add__`、`__sub__`、`__mul__` 等）自定义类运算
+- 🌀 **生成器**：`function*` 声明生成器函数，使用 `yield` 暂停/恢复执行
+- 🔗 **空值处理增强**：空值合并（`??`）、可选链（`?.`）、逻辑赋值（`??=`/`&&=`/`||=`）
+- 📦 **展开运算符**：`...spread` 用于数组展开和剩余参数
 - 📚 **标准库丰富**：字符串、数学、文件 I/O、网络、JSON/XML/YAML 解析等
 
 ---
@@ -567,6 +574,160 @@ quoted.apply();
 println(a);  // 12
 ```
 
+### 模式匹配（match）
+```javascript
+// 基本 match 用法
+let value = 2;
+match (value) {
+    case 1 => println("一");
+    case 2 => println("二");
+    case 3 => println("三");
+    default => println("其他");
+}
+
+// 守卫子句
+let score = 85;
+match (score) {
+    case s if s >= 90 => println("优秀");
+    case s if s >= 80 => println("良好");
+    case s if s >= 60 => println("及格");
+    default => println("不及格");
+}
+```
+
+### 解构赋值
+```javascript
+// 对象解构
+let obj = { name: "ALang", version: 2.0, author: "Dev" };
+let { name, version } = obj;
+println(name);     // "ALang"
+println(version);  // 2.0
+
+// 数组解构
+let arr = [10, 20, 30];
+let [x, y, z] = arr;
+println(x);  // 10
+println(y);  // 20
+println(z);  // 30
+```
+
+### 装饰器（@decorator）
+```javascript
+// 定义装饰器
+function logged(target, key, descriptor) {
+    println(`调用方法: ${key}`);
+    return descriptor;
+}
+
+// 装饰函数
+@logged
+function add(a, b) {
+    return a + b;
+}
+
+// 装饰类
+@sealed
+class MyClass {
+    // ...
+}
+
+// 多个装饰器叠加
+@validate
+@log
+function process(data) {
+    // ...
+}
+```
+
+### 运算符重载
+通过在类中定义特殊魔术方法来重载运算符：
+
+```javascript
+class Vector {
+    function constructor(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    function __add__(other) {
+        return new Vector(this.x + other.x, this.y + other.y);
+    }
+
+    function __sub__(other) {
+        return new Vector(this.x - other.x, this.y - other.y);
+    }
+
+    function __mul__(scalar) {
+        return new Vector(this.x * scalar, this.y * scalar);
+    }
+
+    function __eq__(other) {
+        return this.x === other.x && this.y === other.y;
+    }
+
+    function __lt__(other) {
+        return (this.x * this.x + this.y * this.y) < (other.x * other.x + other.y * other.y);
+    }
+}
+
+let a = new Vector(1, 2);
+let b = new Vector(3, 4);
+let c = a + b;       // 调用 __add__
+let d = a * 2;       // 调用 __mul__
+println(a == b);      // 调用 __eq__
+```
+
+支持的运算符魔术方法：`__add__`、`__sub__`、`__mul__`、`__div__`、`__mod__`、`__eq__`、`__ne__`、`__lt__`、`__gt__`、`__le__`、`__ge__`、`__and__`、`__or__`、`__xor__`、`__shl__`、`__shr__`
+
+### 生成器（yield / function*）
+```javascript
+// 声明生成器函数
+function* counter(start, end) {
+    let i = start;
+    while (i <= end) {
+        yield i;
+        i++;
+    }
+}
+
+// 使用生成器
+let gen = counter(1, 5);
+println(gen.next());  // { value: 1, done: false }
+println(gen.next());  // { value: 2, done: false }
+// ...直到 done: true
+```
+
+### 空值合并与可选链
+```javascript
+// 空值合并 ??
+let name = user.name ?? "匿名用户";
+
+// 可选链 ?.
+let city = user?.address?.city;  // 若 address 为 null/undefined，返回 undefined
+
+// 逻辑赋值运算符
+let config = {};
+config.timeout ??= 3000;       // 仅当 timeout 为 null/undefined 时赋值
+config.debug &&= true;         // 仅当 debug 为真时赋值
+config.verbose ||= "info";     // 仅当 verbose 为假时赋值
+```
+
+### 展开运算符（...spread）
+```javascript
+// 数组展开
+let arr1 = [1, 2, 3];
+let arr2 = [...arr1, 4, 5];  // [1, 2, 3, 4, 5]
+
+// 函数调用中展开
+let numbers = [1, 2, 3];
+println(sum(...numbers));  // 等价于 sum(1, 2, 3)
+
+// 剩余参数
+function collect(...args) {
+    return args;
+}
+```
+
 ### 模块与导入
 #### 包导入
 ```javascript
@@ -620,6 +781,82 @@ dir.create();  // 创建目录
 let files = dir.list();  // 列出目录内容
 dir.delete();  // 删除目录（递归）
 ```
+
+### 标准库包一览
+
+#### std.collections — 集合容器
+| 函数名 | 说明 | 示例 |
+|--------|------|------|
+| `map()` | 创建有序映射 | `let m = map(); m.set("key", value);` |
+| `set()` | 创建集合（元素去重） | `let s = set(); s.add(1); s.has(1);` |
+| `deque()` | 双端队列 | `let d = deque(); d.pushFront(1); d.popBack();` |
+| `stack()` | 栈（LIFO） | `let st = stack(); st.push(1); st.pop();` |
+| `keysSorted(m)` | 返回有序映射的排序键数组 | `keysSorted(myMap);` |
+
+#### std.array — 数组扩展方法
+| 方法名 | 说明 | 示例 |
+|--------|------|------|
+| `flat` | 数组扁平化（降维） | `[1, [2, [3]]].flat(2);` |
+| `flatMap` | 映射后扁平化 | `arr.flatMap([](x) { return [x, x*2]; });` |
+| `unique` | 数组去重 | `[1,1,2,3].unique();` |
+| `chunk` | 按大小分组 | `[1,2,3,4,5].chunk(2);` → `[[1,2],[3,4],[5]]` |
+| `groupBy` | 按条件分组 | `arr.groupBy([](x) { return x % 2; });` |
+| `zip` | 多数组按位组合 | `zip([1,2], ["a","b"]);` → `[[1,"a"],[2,"b"]]` |
+| `diff` | 计算差集 | `[1,2,3].diff([2,3,4]);` → `[1]` |
+
+#### std.log — 日志工具
+| 函数名 | 说明 | 示例 |
+|--------|------|------|
+| `setLevel(level)` | 设置日志级别 | `std.log.setLevel("debug");` |
+| `debug(msg)` | 输出 DEBUG 级别日志 | `std.log.debug("调试信息");` |
+| `info(msg)` | 输出 INFO 级别日志 | `std.log.info("运行信息");` |
+| `warn(msg)` | 输出 WARN 级别日志 | `std.log.warn("警告信息");` |
+| `error(msg)` | 输出 ERROR 级别日志 | `std.log.error("错误信息");` |
+| `json(obj)` | 以 JSON 格式输出对象 | `std.log.json({a: 1, b: 2});` |
+
+#### std.test — 测试框架
+| 函数名 | 说明 | 示例 |
+|--------|------|------|
+| `assert(cond)` | 断言条件为真 | `assert(1 + 1 === 2);` |
+| `assertEqual(a, b)` | 断言两值相等 | `assertEqual(result, 42);` |
+| `assertNotEqual(a, b)` | 断言两值不等 | `assertNotEqual(a, null);` |
+| `getStats()` | 获取测试统计 | `let stats = std.test.getStats();` |
+| `pass()` | 手动标记通过 | `std.test.pass();` |
+| `fail(msg)` | 手动标记失败 | `std.test.fail("不符合预期");` |
+| `printSummary()` | 打印测试摘要 | `std.test.printSummary();` |
+
+#### std.ffi — 外部函数接口
+| 函数名 | 说明 | 示例 |
+|--------|------|------|
+| `dlopen(path)` | 加载动态库 | `let lib = std.ffi.dlopen("mylib.so");` |
+| `dlsym(lib, name)` | 查找符号地址 | `let fn = std.ffi.dlsym(lib, "myFunc");` |
+| `dlclose(lib)` | 关闭动态库 | `std.ffi.dlclose(lib);` |
+| `call(fn, args)` | 调用外部函数 | `std.ffi.call(fn, [1, 2]);` |
+
+#### std.uuid — UUID 生成
+| 函数名 | 说明 | 示例 |
+|--------|------|------|
+| `v4()` | 生成随机 UUID v4 | `let id = std.uuid.v4();` |
+
+#### std.events — 事件系统
+```javascript
+// 基本事件绑定
+let emitter = std.events.connect();
+
+// AsulObject 事件方法
+obj.on("click", [](data) { println("点击事件:", data); });
+obj.off("click", handler);
+obj.emit("click", { x: 10, y: 20 });
+obj.receive("message", [](msg) { println("收到消息:", msg); });
+```
+
+#### std.encoding — 编码转换
+| 编码方式 | 编码函数 | 解码函数 |
+|----------|----------|----------|
+| Base64 | `std.encoding.base64Encode(data)` | `std.encoding.base64Decode(str)` |
+| Base64URL | `std.encoding.base64UrlEncode(data)` | `std.encoding.base64UrlDecode(str)` |
+| Hex | `std.encoding.hexEncode(data)` | `std.encoding.hexDecode(str)` |
+| URL | `std.encoding.urlEncode(str)` | `std.encoding.urlDecode(str)` |
 
 ---
 
@@ -756,7 +993,7 @@ int main() {
 ## ⚠️ 限制说明
 - 暂不支持原型链与动态派发（方法调用基于静态查找）
 - 无 `for-of`/`for-in` 语法，仅支持 C 风格 `for` 与 `foreach`
-- 异常处理暂不支持 `finally` 块
+- ~~异常处理暂不支持 `finally` 块~~（已支持 `try/catch/finally` 完整语法）
 - `go` 关键字中的异常会被静默吞掉（需自行扩展日志记录）
 - 宿主与脚本间仅支持基元类型（number/string/boolean/null）传递
 

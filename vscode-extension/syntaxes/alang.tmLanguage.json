@@ -263,7 +263,7 @@
         },
         {
           "name": "keyword.operator.arrow keyword.operator.arrow.alang",
-          "match": "(<-|->|=>)"
+          "match": "(<-|->)"
         },
         {
           "name": "keyword.operator.logical keyword.operator.nullish.alang",

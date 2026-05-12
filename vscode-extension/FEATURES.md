@@ -1,6 +1,6 @@
 # ALang VSCode Extension - Feature Summary
 
-## Version 0.2.0 - Complete Feature Set
+## Version 0.3.1 - Complete Feature Set
 
 ### 🎨 1. Color Theme with Default Token Colors
 
@@ -270,17 +270,87 @@ code --install-extension alang-language-support-0.2.0.vsix
 
 ## Feature Comparison
 
-| Feature | v0.1.0 | v0.2.0 |
-|---------|--------|--------|
-| Syntax Highlighting | ✅ | ✅ |
-| Color Theme | ❌ | ✅ |
-| Syntax Checking | ❌ | ✅ |
-| Go to Definition | ❌ | ✅ |
-| Auto-completion | ❌ | ✅ |
-| Bracket Matching | ✅ | ✅ |
-| Auto-closing | ✅ | ✅ |
-| Comment Toggle | ✅ | ✅ |
-| Code Folding | ✅ | ✅ |
+| Feature | v0.1.0 | v0.2.0 | v0.3.1 |
+|---------|--------|--------|--------|
+| Syntax Highlighting | ✅ | ✅ | ✅ |
+| Color Theme | ❌ | ✅ | ✅ |
+| Syntax Checking | ❌ | ✅ | ✅ |
+| Go to Definition | ❌ | ✅ | ✅ |
+| Auto-completion | ❌ | ✅ | ✅ |
+| Bracket Matching | ✅ | ✅ | ✅ |
+| Auto-closing | ✅ | ✅ | ✅ |
+| Comment Toggle | ✅ | ✅ | ✅ |
+| Code Folding | ✅ | ✅ | ✅ |
+| LSP 模块化 (settings/symbols/validation/completion/definition) | ❌ | ❌ | ✅ |
+| 新语言特性语法高亮 (match, 装饰器, 解构, yield 等) | ❌ | ❌ | ✅ |
+| 新标准库包语法支持 | ❌ | ❌ | ✅ |
+| 包管理重构 (os/std.os 合并, url/std.network 合并) | ❌ | ❌ | ✅ |
+
+---
+
+---
+
+### 🔧 6. LSP 模块化重构 (v0.3.1)
+
+**Feature**: 语言服务器协议模块拆分，提升可维护性
+
+**新增模块**:
+- `settings.ts` - 扩展配置管理
+- `symbols.ts` - 符号表与符号解析
+- `validation.ts` - 语法验证与诊断
+- `completion.ts` - 自动补全提供者
+- `definition.ts` - 转到定义提供者
+
+**架构改进**:
+- 原 `server.ts` 单一文件拆分为独立模块
+- 各模块职责清晰，便于单独测试与扩展
+- 符号表支持新语言特性（装饰器、解构赋值、match 表达式等）
+
+---
+
+### 🆕 7. 新语言特性支持 (v0.3.1)
+
+语法高亮和编辑器支持已扩展至以下新特性：
+
+| 特性 | 语法示例 | 高亮支持 |
+|------|----------|----------|
+| match 模式匹配 | `match (x) { case 1 => ... }` | ✅ |
+| 守卫子句 | `case s if s > 0 => ...` | ✅ |
+| 解构赋值 | `let {a, b} = obj;` | ✅ |
+| 装饰器 | `@decorator` | ✅ |
+| yield/generator | `function* gen() { yield 1; }` | ✅ |
+| 逻辑赋值 | `??=`, `&&=`, `\|\|=` | ✅ |
+| 空值合并 | `??` | ✅ |
+| 可选链 | `?.` | ✅ |
+| 展开运算符 | `...spread` | ✅ |
+| 运算符重载 | `__add__`, `__sub__` 等 | ✅ |
+
+---
+
+### 📦 8. 标准库包扩展 (v0.3.1)
+
+新增标准库包的语法支持与高亮：
+
+| 包名 | 说明 |
+|------|------|
+| `std.collections` | map, set, deque, stack, keysSorted |
+| `std.array` | flat, flatMap, unique, chunk, groupBy, zip, diff |
+| `std.log` | setLevel, debug, info, warn, error, json |
+| `std.test` | assert, assertEqual, assertNotEqual, getStats, pass, fail, printSummary |
+| `std.ffi` | dlopen, dlsym, dlclose, call |
+| `std.uuid` | v4 |
+| `std.events` | connect; AsulObject (on, off, emit, receive) |
+| `std.encoding` | Base64, Base64URL, Hex, URL encode/decode |
+
+---
+
+### 🔄 9. 包管理重构 (v0.3.1)
+
+标准库包命名统一与合并：
+
+- `os` 与 `std.os` 合并为统一的 `std.os` 接口
+- `url` 与 `std.network` 合并为统一的 `std.network` 接口
+- 减少命名歧义，统一导入风格
 
 ---
 
@@ -317,6 +387,6 @@ For issues or questions:
 
 ---
 
-**Version**: 0.2.0  
-**Release Date**: 2025-12-09  
+**Version**: 0.3.1  
+**Release Date**: 2026-05-13  
 **Status**: Production Ready ✅
