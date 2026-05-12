@@ -385,6 +385,11 @@ void registerStdNetworkPackage(Interpreter& interp) {
 				// host[:port]
 				{
 					size_t hpEnd = pathStart;
+					// Check for user:pass@host
+					size_t atSign = u.find('@', hostStart);
+					if (atSign != std::string::npos && atSign < hpEnd) {
+						hostStart = atSign + 1;
+					}
 					size_t colon = u.find(':', hostStart);
 					if (colon != std::string::npos && colon < hpEnd) {
 						host = u.substr(hostStart, colon - hostStart);
@@ -1172,6 +1177,17 @@ void registerStdNetworkPackage(Interpreter& interp) {
 			(*httpPkg)["getStatusText"] = Value{getStatusTextFn};
 
 			(*netPkg)["http"] = Value{httpPkg};
+		}
+	});
+
+	// Backward compatibility: register std.url as alias for std.network
+	Interpreter* interpPtr2 = &interp;
+	interp.registerLazyPackage("std.url", [interpPtr2](std::shared_ptr<Object> urlPkg) {
+		interpPtr2->loadLazyPackage("std.network");
+		auto netPkg = interpPtr2->ensurePackage("std.network");
+		auto it = netPkg->find("URL");
+		if (it != netPkg->end()) {
+			(*urlPkg)["URL"] = it->second;
 		}
 	});
 }

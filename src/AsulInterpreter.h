@@ -353,6 +353,25 @@ public:
 				return v;
 			}
 			if (auto pins = std::get_if<std::shared_ptr<Instance>>(&ov)) {
+				// Check for setter
+				if (*pins && (*pins)->klass) {
+					auto setter = findSetter((*pins)->klass, sp->name);
+					if (setter) {
+						auto bound = std::make_shared<Function>(*setter);
+						auto thisEnv = std::make_shared<Environment>(bound->closure);
+						thisEnv->define("this", ov);
+						bound->closure = thisEnv;
+						std::vector<Value> setterArgs{v};
+						if (bound->isBuiltin) {
+							bound->builtin(setterArgs, bound->closure);
+						} else {
+							auto local = std::make_shared<Environment>(bound->closure);
+							if (!bound->params.empty()) local->define(bound->params[0], v);
+							try { executeBlock(bound->body, local); } catch (const ReturnSignal&) {}
+						}
+						return v;
+					}
+				}
 				(**pins).fields[sp->name] = v;
 				return v;
 			}
@@ -913,6 +932,35 @@ public:
 				return evaluate(yieldExpr->value);
 			}
 			return Value{std::monostate{}};
+		}
+		if (auto superExpr = std::dynamic_pointer_cast<SuperExpr>(expr)) {
+			// Get the current 'this' instance
+			Value thisVal;
+			try { thisVal = env->get("this"); } catch (...) {
+				throw std::runtime_error("'super' can only be used inside a class method");
+			}
+			auto pins = std::get_if<std::shared_ptr<Instance>>(&thisVal);
+			if (!pins || !*pins) {
+				throw std::runtime_error("'super' can only be used inside a class method");
+			}
+			auto currentClass = (*pins)->klass;
+			// Search for the method in parent classes only (skip the current class)
+			std::shared_ptr<Function> found = nullptr;
+			for (auto& super : currentClass->supers) {
+				auto m = findMethod(super, superExpr->method);
+				if (m) { found = m; break; }
+			}
+			if (!found) {
+				std::ostringstream oss;
+				oss << "No method '" << superExpr->method << "' found in parent classes";
+				throw std::runtime_error(oss.str());
+			}
+			// Bind 'this' to the method
+			auto bound = std::make_shared<Function>(*found);
+			auto thisEnv = std::make_shared<Environment>(bound->closure);
+			thisEnv->define("this", thisVal);
+			bound->closure = thisEnv;
+			return Value{bound};
 		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
 			// derive callee name for stack trace
@@ -1681,7 +1729,11 @@ public:
 					throw std::runtime_error("Method decorator must return a function");
 				}
 
-				if (m->isStatic) {
+				if (m->isGetter) {
+					klass->getters[m->name] = fn;
+				} else if (m->isSetter) {
+					klass->setters[m->name] = fn;
+				} else if (m->isStatic) {
 					klass->staticMethods[m->name] = fn;
 				} else {
 					klass->methods[m->name] = fn;
@@ -1727,7 +1779,7 @@ public:
 			auto klass = std::get<std::shared_ptr<ClassInfo>>(cv);
 			for (auto& m : ext->methods) {
 				auto fn = std::make_shared<Function>();
-				fn->params.clear(); 
+				fn->params.clear();
 				fn->defaultValues.clear();
 				for (auto &p : m->params) {
 					fn->params.push_back(p.name);
@@ -1737,7 +1789,13 @@ public:
 				fn->closure = env;
 				fn->isAsync = m->isAsync;
 				fn->isGenerator = m->isGenerator;
-				klass->methods[m->name] = fn; // 覆盖或新增
+				if (m->isGetter) {
+					klass->getters[m->name] = fn;
+				} else if (m->isSetter) {
+					klass->setters[m->name] = fn;
+				} else {
+					klass->methods[m->name] = fn; // 覆盖或新增
+				}
 			}
 			return;
 		}
@@ -1827,6 +1885,7 @@ private:
 	// Lazy loading support
 	std::map<std::string, std::function<void(std::shared_ptr<Object>)>> lazyPackages;
 
+public:
 	bool loadLazyPackage(const std::string& name) {
 		auto it = lazyPackages.find(name);
 		if (it != lazyPackages.end()) {
@@ -1837,6 +1896,8 @@ private:
 		}
 		return false;
 	}
+
+private:
 
 	// 构建带有增强信息的异常对象：{ message, line, column, length, stack: [...], type: "Error" }
 	Value buildExceptionValue(const std::string& msg, int line = -1, int column = -1, int length = -1) {
@@ -2115,10 +2176,51 @@ public:
 		}
 		return nullptr;
 	}
+	// Helper to find getter in class hierarchy
+	static std::shared_ptr<Function> findGetter(std::shared_ptr<ClassInfo> k, const std::string& name) {
+		if (!k) return nullptr;
+		auto it = k->getters.find(name);
+		if (it != k->getters.end()) return it->second;
+		for (auto& s : k->supers) {
+			auto f = findGetter(s, name);
+			if (f) return f;
+		}
+		return nullptr;
+	}
+	// Helper to find setter in class hierarchy
+	static std::shared_ptr<Function> findSetter(std::shared_ptr<ClassInfo> k, const std::string& name) {
+		if (!k) return nullptr;
+		auto it = k->setters.find(name);
+		if (it != k->setters.end()) return it->second;
+		for (auto& s : k->supers) {
+			auto f = findSetter(s, name);
+			if (f) return f;
+		}
+		return nullptr;
+	}
 	Value getProperty(const Value& obj, const std::string& name) {
-		// Instance: fields then methods
+		// Instance: getters first, then fields, then methods
 		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
 			if (*pins) {
+				// Check for getter (takes priority over fields)
+				if ((*pins)->klass) {
+					auto getter = findGetter((*pins)->klass, name);
+					if (getter) {
+						auto bound = std::make_shared<Function>(*getter);
+						auto thisEnv = std::make_shared<Environment>(bound->closure);
+						thisEnv->define("this", obj);
+						bound->closure = thisEnv;
+						// Call the getter
+						if (bound->isBuiltin) {
+							return bound->builtin({}, bound->closure);
+						} else {
+							auto local = std::make_shared<Environment>(bound->closure);
+							Value ret{std::monostate{}};
+							try { executeBlock(bound->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
+							return ret;
+						}
+					}
+				}
 				auto fit = (*pins)->fields.find(name);
 				if (fit != (*pins)->fields.end()) return fit->second;
 				if ((*pins)->klass) {
@@ -2173,7 +2275,7 @@ public:
 			if (name == "join") { auto fn=std::make_shared<Function>(); fn->isBuiltin=true; auto a=*parr; fn->builtin=[a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { std::string delim=""; if (!args.empty()) delim=toString(args[0]); if (!a||a->empty()) return Value{ std::string("") }; std::ostringstream oss; for (size_t i=0;i<a->size();++i) { if (i) oss<<delim; oss<<toString((*a)[i]); } return Value{ oss.str() }; }; return fn; }
 			if (name == "reverse") { auto fn=std::make_shared<Function>(); fn->isBuiltin=true; auto a=*parr; fn->builtin=[a](const std::vector<Value>&, std::shared_ptr<Environment>)->Value { if (a) std::reverse(a->begin(), a->end()); return Value{a}; }; return fn; }
 			if (name == "sort") { auto fn=std::make_shared<Function>(); fn->isBuiltin=true; auto a=*parr; fn->builtin=[this,a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (!a) return Value{std::monostate{}}; std::shared_ptr<Function> cmp; if (!args.empty()) { if (!std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("sort comparator must be function"); cmp=std::get<std::shared_ptr<Function>>(args[0]); }
-				std::stable_sort(a->begin(), a->end(), [this,cmp](const Value& lhs, const Value& rhs){ if (cmp) { Value ret{std::monostate{}}; if (cmp->isBuiltin) { std::vector<Value> carg{lhs,rhs}; ret=cmp->builtin(carg, cmp->closure); } else { auto local=std::make_shared<Environment>(cmp->closure); if (cmp->params.size()>0) local->define(cmp->params[0], lhs); if (cmp->params.size()>1) local->define(cmp->params[1], rhs); try { executeBlock(cmp->body, local); } catch (const ReturnSignal& rs) { ret=rs.value; } } return isTruthy(ret); }
+				std::stable_sort(a->begin(), a->end(), [this,cmp](const Value& lhs, const Value& rhs){ if (cmp) { Value ret{std::monostate{}}; if (cmp->isBuiltin) { std::vector<Value> carg{lhs,rhs}; ret=cmp->builtin(carg, cmp->closure); } else { auto local=std::make_shared<Environment>(cmp->closure); if (cmp->params.size()>0) local->define(cmp->params[0], lhs); if (cmp->params.size()>1) local->define(cmp->params[1], rhs); try { executeBlock(cmp->body, local); } catch (const ReturnSignal& rs) { ret=rs.value; } } if (auto rn = std::get_if<double>(&ret)) return *rn < 0.0; return isTruthy(ret); }
 				// default compare: numbers numeric asc, else string lexicographical
 				auto ln=std::get_if<double>(&lhs); auto rn=std::get_if<double>(&rhs); if (ln && rn) return *ln < *rn; std::string ls=toString(lhs); std::string rs=toString(rhs); return ls < rs; }); return Value{a}; }; return fn; }
 			if (name == "splice") { auto fn=std::make_shared<Function>(); fn->isBuiltin=true; auto a=*parr; fn->builtin=[a](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value { if (!a) return Value{std::monostate{}}; if (args.empty()) throw std::runtime_error("splice expects start index"); double startD=getNumber(args[0], "splice start"); if (startD<0) startD+=a->size(); if (startD<0) startD=0; size_t start = static_cast<size_t>(startD); if (start>a->size()) start=a->size(); size_t deleteCount=0; size_t insertFrom=1; if (args.size()>=2) { double delD=getNumber(args[1], "splice deleteCount"); if (delD<0) delD=0; deleteCount=static_cast<size_t>(delD); insertFrom=2; } if (start+deleteCount>a->size()) deleteCount = a->size()-start; auto removed=std::make_shared<Array>(); for (size_t i=0;i<deleteCount;++i) removed->push_back((*a)[start+i]); a->erase(a->begin()+start, a->begin()+start+deleteCount); // insert new items
@@ -2608,6 +2710,60 @@ public:
 							}
 						} else {
 							ps->catchCallbacks.push_back({ cb, nextP });
+						}
+					}
+					return Value{nextP};
+				};
+				return fn;
+			}
+			if (name == "finally") {
+				auto fn = std::make_shared<Function>(); fn->isBuiltin = true;
+				auto ps = *p;
+				fn->builtin = [ps](const std::vector<Value>& args, std::shared_ptr<Environment>)->Value {
+					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("finally expects a function");
+					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
+					auto nextP = std::make_shared<PromiseState>();
+					nextP->loopPtr = ps->loopPtr;
+					auto makeFinallyWrapper = [ps, cb, nextP](bool origRejected) -> std::shared_ptr<Function> {
+						auto wrapper = std::make_shared<Function>();
+						wrapper->isBuiltin = true;
+						wrapper->builtin = [ps, cb, nextP, origRejected](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
+							if (ps->loopPtr) {
+								auto loop = static_cast<Interpreter*>(ps->loopPtr);
+								loop->postTask([ps, cb, nextP, loop, origRejected]{
+									try {
+										if (cb->isBuiltin) { cb->builtin({}, cb->closure); }
+										else {
+											auto local = std::make_shared<Environment>(cb->closure);
+											try { loop->executeBlock(cb->body, local); } catch (...) {}
+										}
+									} catch (...) {}
+									loop->settlePromise(nextP, origRejected, ps->result);
+								});
+							}
+							return Value{std::monostate{}};
+						};
+						return wrapper;
+					};
+					{
+						std::lock_guard<std::mutex> lk(ps->mtx);
+						if (ps->settled) {
+							if (ps->loopPtr) {
+								auto loop = static_cast<Interpreter*>(ps->loopPtr);
+								loop->postTask([ps, cb, nextP, loop]{
+									try {
+										if (cb->isBuiltin) { cb->builtin({}, cb->closure); }
+										else {
+											auto local = std::make_shared<Environment>(cb->closure);
+											try { loop->executeBlock(cb->body, local); } catch (...) {}
+										}
+									} catch (...) {}
+									loop->settlePromise(nextP, ps->rejected, ps->result);
+								});
+							}
+						} else {
+							ps->thenCallbacks.push_back({ makeFinallyWrapper(false), nextP });
+							ps->catchCallbacks.push_back({ makeFinallyWrapper(true), nextP });
 						}
 					}
 					return Value{nextP};

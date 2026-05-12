@@ -74,6 +74,7 @@ static bool isPropertyNameToken(TokenType type) {
 		case TokenType::As:
 		case TokenType::Export:
 		case TokenType::Static:
+		case TokenType::Super:
 			return true;
 		default:
 			return false;
@@ -402,7 +403,7 @@ StmtPtr Parser::interfaceDeclaration(bool isExported) {
 				(void)consume(TokenType::Identifier, "缺少参数名称");
 				// optional type annotation after parameter name
 				if (match({TokenType::Colon})) { (void)consume(TokenType::Identifier, "':' 后缺少类型名称"); }
-			} while (match({TokenType::Comma}));
+			} while (match({TokenType::Comma}) && !check(TokenType::RightParen));
 		}
 		consume(TokenType::RightParen, "缺少 ')'");
 		// 检查是否有函数体（不允许）
@@ -448,7 +449,19 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 			bool isAsync = match({TokenType::Async});
 			(void)match({TokenType::Function});
 			bool isGenerator = match({TokenType::Star});
+
+			// Check for getter/setter: get name() / set name(value)
+			bool isGetter = false;
+			bool isSetter = false;
 			auto mname = consume(TokenType::Identifier, "缺少方法名称").lexeme;
+			if (mname == "get" && check(TokenType::Identifier)) {
+				isGetter = true;
+				mname = consume(TokenType::Identifier, "缺少属性名称").lexeme;
+			} else if (mname == "set" && check(TokenType::Identifier)) {
+				isSetter = true;
+				mname = consume(TokenType::Identifier, "缺少属性名称").lexeme;
+			}
+
 			consume(TokenType::LeftParen, "缺少 '('");
 			std::vector<Param> params;
 			if (!check(TokenType::RightParen)) {
@@ -457,14 +470,14 @@ StmtPtr Parser::classDeclaration(bool isExported) {
 					std::optional<std::string> ptype = std::nullopt;
 					if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "':' 后缺少类型名称").lexeme;
 					params.emplace_back(pname, ptype);
-				} while (match({TokenType::Comma}));
+				} while (match({TokenType::Comma}) && !check(TokenType::RightParen));
 			}
 			consume(TokenType::RightParen, "缺少 ')'");
 			// optional return type
 			std::optional<std::string> retType = std::nullopt;
 			if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "':' 后缺少返回类型名称").lexeme;
 			auto body = statement();
-			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType, isStatic, false, 0, 1, 1, decorators));
+			cls->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType, isStatic, false, 0, 1, 1, decorators, isGetter, isSetter));
 		}
 		consume(TokenType::RightBrace, "类主体后缺少 '}'");
 		// 可选分号：class Name { ... };
@@ -484,6 +497,16 @@ StmtPtr Parser::extendsDeclaration() {
 		(void)match({TokenType::Function});
 		bool isGenerator = match({TokenType::Star});
 		auto mname = consume(TokenType::Identifier, "缺少方法名称").lexeme;
+		// Check for getter/setter
+		bool isGetter = false;
+		bool isSetter = false;
+		if (mname == "get" && check(TokenType::Identifier)) {
+			isGetter = true;
+			mname = consume(TokenType::Identifier, "缺少属性名称").lexeme;
+		} else if (mname == "set" && check(TokenType::Identifier)) {
+			isSetter = true;
+			mname = consume(TokenType::Identifier, "缺少属性名称").lexeme;
+		}
 		consume(TokenType::LeftParen, "缺少 '('");
 		std::vector<Param> params;
 		if (!check(TokenType::RightParen)) {
@@ -492,14 +515,15 @@ StmtPtr Parser::extendsDeclaration() {
 				std::optional<std::string> ptype = std::nullopt;
 				if (match({TokenType::Colon})) ptype = consume(TokenType::Identifier, "':' 后缺少类型名称").lexeme;
 				params.emplace_back(pname, ptype);
-			} while (match({TokenType::Comma}));
+			} while (match({TokenType::Comma}) && !check(TokenType::RightParen));
 		}
 		consume(TokenType::RightParen, "缺少 ')'");
 		// optional return type
 		std::optional<std::string> retType = std::nullopt;
 		if (match({TokenType::Colon})) retType = consume(TokenType::Identifier, "':' 后缺少返回类型名称").lexeme;
 		auto body = statement();
-		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType));
+		std::vector<ExprPtr> emptyDecs;
+		ext->methods.push_back(std::make_shared<FunctionStmt>(mname, params, body, isAsync, isGenerator, retType, false, false, 0, 1, 1, emptyDecs, isGetter, isSetter));
 	}
 	consume(TokenType::RightBrace, "扩展主体后缺少 '}'");
 	// 可选分号：extends Name { ... };
@@ -553,7 +577,7 @@ StmtPtr Parser::functionDecl(bool isAsync, bool isExported) {
 			if (isRest && !check(TokenType::RightParen)) {
 				error("剩余参数必须在最后");
 			}
-		} while (match({TokenType::Comma}));
+		} while (match({TokenType::Comma}) && !check(TokenType::RightParen));
 	}
 	consume(TokenType::RightParen, "缺少 ')'");
 	// optional return type (accept ':' or '->')
@@ -1129,7 +1153,7 @@ ExprPtr Parser::postfix() {
 ExprPtr Parser::finishCall(ExprPtr callee) {
 	std::vector<ExprPtr> args;
 	if (!check(TokenType::RightParen)) {
-		do { args.push_back(expression()); } while (match({TokenType::Comma}));
+		do { args.push_back(expression()); } while (match({TokenType::Comma}) && !check(TokenType::RightParen));
 	}
 	Token rp = consume(TokenType::RightParen, "参数后缺少 ')'");
 	return std::make_shared<CallExpr>(callee, args, rp.line, rp.column, std::max(1, rp.length));
@@ -1231,7 +1255,7 @@ ExprPtr Parser::primary() {
 					if (isRest && !check(TokenType::RightParen)) {
 						error("剩余参数必须在最后");
 					}
-				} while (match({TokenType::Comma}));
+				} while (match({TokenType::Comma}) && !check(TokenType::RightParen));
 			}
 			consume(TokenType::RightParen, "lambda 参数后缺少 ')'");
 			auto body = statement();
@@ -1248,7 +1272,7 @@ ExprPtr Parser::primary() {
 		}
 		consume(TokenType::LeftParen, "缺少 '('");
 		std::vector<ExprPtr> args;
-		if (!check(TokenType::RightParen)) { do { args.push_back(expression()); } while (match({TokenType::Comma})); }
+		if (!check(TokenType::RightParen)) { do { args.push_back(expression()); } while (match({TokenType::Comma}) && !check(TokenType::RightParen)); }
 		consume(TokenType::RightParen, "缺少 ')'");
 		return std::make_shared<NewExpr>(callee, args, newTok.line, newTok.column, std::max(1, newTok.length));
 	}
@@ -1265,6 +1289,13 @@ ExprPtr Parser::primary() {
 		return parseInterpolatedString(s, tok.line, tok.column, std::max(1, tok.length));
 	}
 	if (match({TokenType::Identifier})) { auto tok = previous(); return std::make_shared<VariableExpr>(tok.lexeme, tok.line, tok.column, tok.length); }
+	// super.method
+	if (match({TokenType::Super})) {
+		auto superTok = previous();
+		consume(TokenType::Dot, "'super' 后缺少 '.'");
+		auto methodTok = consume(TokenType::Identifier, "'.' 后缺少方法名");
+		return std::make_shared<SuperExpr>(methodTok.lexeme, superTok.line, superTok.column, superTok.length);
+	}
 	if (match({TokenType::LeftBracket})) {
 		std::vector<ExprPtr> elems;
 		if (!check(TokenType::RightBracket)) {
@@ -1277,7 +1308,7 @@ ExprPtr Parser::primary() {
 				} else {
 					elems.push_back(expression());
 				}
-			} while (match({TokenType::Comma}));
+			} while (match({TokenType::Comma}) && !check(TokenType::RightBracket));
 		}
 		consume(TokenType::RightBracket, "数组字面量后缺少 ']'");
 		return std::make_shared<ArrayLiteralExpr>(elems);
@@ -1305,7 +1336,7 @@ ExprPtr Parser::primary() {
 					p.value = expression();
 				}
 				props.push_back(std::move(p));
-			} while (match({TokenType::Comma}));
+			} while (match({TokenType::Comma}) && !check(TokenType::RightBrace));
 		}
 		consume(TokenType::RightBrace, "对象字面量后缺少 '}'");
 		return std::make_shared<ObjectLiteralExpr>(props);

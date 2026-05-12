@@ -104,6 +104,8 @@ struct ClassInfo {
 	std::vector<std::shared_ptr<ClassInfo>> supers; // 多继承支持，按声明顺序线性查找
 	std::unordered_map<std::string, std::shared_ptr<Function>> methods;
 	std::unordered_map<std::string, std::shared_ptr<Function>> staticMethods;
+	std::unordered_map<std::string, std::shared_ptr<Function>> getters;
+	std::unordered_map<std::string, std::shared_ptr<Function>> setters;
 	bool isNative{false}; // If true, new creates InstanceExt
 };
 

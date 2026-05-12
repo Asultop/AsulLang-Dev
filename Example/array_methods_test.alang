@@ -10,6 +10,7 @@ let words = ["hello", "world", "alang", "test"];
 
 // 1. map - 转换数组元素
 println("\n== map 测试 ==");
+
 let doubled = numbers.map([](x) { return x * 2; });
 println("原数组:", numbers);
 println("翻倍后:", doubled);

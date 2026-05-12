@@ -64,14 +64,60 @@ void Lexer::string() {
 }
 
 void Lexer::number() {
-	while (std::isdigit(peek())) advance();
-	if (peek() == '.' && std::isdigit(peekNext())) {
+	// Feature 6: Binary (0b) and Octal (0o) literals
+	if (source[start] == '0' && !isAtEnd()) {
+		char next = peek();
+		if (next == 'b' || next == 'B') {
+			advance(); // consume 'b'/'B'
+			if (!isAtEnd() && (peek() == '0' || peek() == '1')) {
+				while (!isAtEnd() && (peek() == '0' || peek() == '1' || peek() == '_')) advance();
+				int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+				int len = static_cast<int>(current - start);
+				std::string raw = source.substr(start, current - start);
+				// Convert binary to decimal string
+				long long val = 0;
+				for (size_t i = 2; i < raw.size(); ++i) {
+					if (raw[i] == '_') continue;
+					val = val * 2 + (raw[i] - '0');
+				}
+				tokens.push_back(Token{TokenType::Number, std::to_string(static_cast<double>(val)), line, col, len});
+				return;
+			}
+			// Not valid binary, fall through to normal number parsing
+			// Reset current back to after '0b'
+		} else if (next == 'o' || next == 'O') {
+			advance(); // consume 'o'/'O'
+			if (!isAtEnd() && peek() >= '0' && peek() <= '7') {
+				while (!isAtEnd() && ((peek() >= '0' && peek() <= '7') || peek() == '_')) advance();
+				int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
+				int len = static_cast<int>(current - start);
+				std::string raw = source.substr(start, current - start);
+				// Convert octal to decimal string
+				long long val = 0;
+				for (size_t i = 2; i < raw.size(); ++i) {
+					if (raw[i] == '_') continue;
+					val = val * 8 + (raw[i] - '0');
+				}
+				tokens.push_back(Token{TokenType::Number, std::to_string(static_cast<double>(val)), line, col, len});
+				return;
+			}
+			// Not valid octal, fall through to normal number parsing
+		}
+	}
+	// Feature 5: Numeric separators (underscores) in decimal numbers
+	while (std::isdigit(peek()) || peek() == '_') advance();
+	if (peek() == '.' && (std::isdigit(peekNext()) || peekNext() == '_')) {
 		advance();
-		while (std::isdigit(peek())) advance();
+		while (std::isdigit(peek()) || peek() == '_') advance();
 	}
 	int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
 	int len = static_cast<int>(current - start);
-	tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len});
+	std::string raw = source.substr(start, current - start);
+	// Remove underscores for the actual numeric value
+	std::string clean;
+	clean.reserve(raw.size());
+	for (char ch : raw) { if (ch != '_') clean.push_back(ch); }
+	tokens.push_back(Token{TokenType::Number, clean, line, col, len});
 }
 
 void Lexer::identifier() {
@@ -92,7 +138,7 @@ void Lexer::identifier() {
 		{"interface", TokenType::Interface},
 		{"import", TokenType::Import}, {"from", TokenType::From}, {"as", TokenType::As}, {"export", TokenType::Export},
 		{"static", TokenType::Static},
-		{"match", TokenType::Match}, {"yield", TokenType::Yield},
+		{"match", TokenType::Match}, {"yield", TokenType::Yield}, {"super", TokenType::Super},
 	};
 	auto it = keywords.find(text);
 	int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1);
@@ -281,7 +327,7 @@ void Lexer::scanToken() {
 		break;
 	case '"': string(); break;
 	default:
-		if (std::isdigit(c)) { while (std::isdigit(peek()) || (peek()=='.' && std::isdigit(peekNext()))) advance(); int col = static_cast<int>((start >= lineStart) ? (start - lineStart + 1) : 1); int len = static_cast<int>(current - start); tokens.push_back(Token{TokenType::Number, source.substr(start, current - start), line, col, len}); }
+		if (std::isdigit(c)) { number(); }
 		else if (std::isalpha(c) || c == '_' || (static_cast<unsigned char>(c) >= 0x80)) identifier();
 		else {
 			size_t pos = current - 1;

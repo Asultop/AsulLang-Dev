@@ -61,7 +61,7 @@ const std::vector<PackageMeta>& getPackageMetadata() {
     {
         PackageMeta pkg;
         pkg.name = "std.os";
-        pkg.exports = { "system", "getenv", "setenv", "signal", "kill", "raise", "getpid", "popen", "platform" };
+        pkg.exports = { "system", "getenv", "setenv", "getEnv", "setEnv", "signal", "kill", "raise", "getpid", "popen", "platform", "call", "exit", "arch" };
         packages.push_back(pkg);
     }
 
@@ -99,6 +99,11 @@ const std::vector<PackageMeta>& getPackageMetadata() {
         dirClass.name = "Dir";
         dirClass.methods = { {"list"}, {"exists"}, {"create"}, {"delete"}, {"rename"}, {"walk"} };
         pkg.classes.push_back(dirClass);
+
+        ClassMeta streamClass;
+        streamClass.name = "Stream";
+        streamClass.methods = { {"write"}, {"readToken"}, {"readLine"} };
+        pkg.classes.push_back(streamClass);
 
         packages.push_back(pkg);
     }
@@ -154,20 +159,6 @@ const std::vector<PackageMeta>& getPackageMetadata() {
         packages.push_back(pkg);
     }
 
-    // std.url
-    {
-        PackageMeta pkg;
-        pkg.name = "std.url";
-        pkg.exports = { "URL" };
-        
-        ClassMeta urlClass;
-        urlClass.name = "URL";
-        urlClass.methods = { {"constructor"}, {"parseQuery"} };
-        pkg.classes.push_back(urlClass);
-
-        packages.push_back(pkg);
-    }
-
     // std.events
     {
         PackageMeta pkg;
@@ -186,7 +177,7 @@ const std::vector<PackageMeta>& getPackageMetadata() {
     {
         PackageMeta pkg;
         pkg.name = "std.crypto";
-        pkg.exports = { "randomUUID", "getRandomValues", "md5", "sha1", "sha256" };
+        pkg.exports = { "randomUUID", "getRandomValues", "md5", "sha1", "sha256", "aes" };
         packages.push_back(pkg);
     }
 
@@ -203,6 +194,30 @@ const std::vector<PackageMeta>& getPackageMetadata() {
         PackageMeta pkg;
         pkg.name = "json";
         pkg.exports = { "parse", "stringify" };
+        packages.push_back(pkg);
+    }
+
+    // xml
+    {
+        PackageMeta pkg;
+        pkg.name = "xml";
+        pkg.exports = { "parse" };
+        packages.push_back(pkg);
+    }
+
+    // yaml
+    {
+        PackageMeta pkg;
+        pkg.name = "yaml";
+        pkg.exports = { "parse" };
+        packages.push_back(pkg);
+    }
+
+    // os (backward compatibility alias for std.os)
+    {
+        PackageMeta pkg;
+        pkg.name = "os";
+        pkg.exports = { "system", "getenv", "setenv", "getEnv", "setEnv", "signal", "kill", "raise", "getpid", "popen", "platform", "call", "exit", "arch" };
         packages.push_back(pkg);
     }
 
