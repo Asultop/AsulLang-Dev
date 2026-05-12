@@ -1,0 +1,200 @@
+// 属性访问模式示例：模拟 getter/setter 行为
+// 说明：ALang 目前没有原生 get/set 关键字，
+//       但可以通过方法封装实现类似的属性访问控制模式。
+
+println("== 属性访问模式示例 ==");
+
+// -------------------------------------------------------
+// 1) 通过方法模拟 getter/setter
+// -------------------------------------------------------
+println("\n--- 1) 方法封装模拟 getter/setter ---");
+
+class Temperature {
+    function constructor(celsius) {
+        this._celsius = celsius; // 内部存储（约定下划线开头为私有）
+    }
+
+    // 模拟 getter：获取摄氏温度
+    function getCelsius() {
+        println("  [getter] 读取摄氏温度");
+        return this._celsius;
+    }
+
+    // 模拟 setter：设置摄氏温度
+    function setCelsius(value) {
+        if (value < -273.15) {
+            throw "温度不能低于绝对零度 (-273.15 C)";
+        }
+        println("  [setter] 设置摄氏温度为 ${value}");
+        this._celsius = value;
+    }
+
+    // 计算属性：华氏温度（只读，从摄氏转换）
+    function getFahrenheit() {
+        println("  [getter] 计算华氏温度");
+        return this._celsius * 9 / 5 + 32;
+    }
+
+    // 计算属性：开尔文温度（只读）
+    function getKelvin() {
+        println("  [getter] 计算开尔文温度");
+        return this._celsius + 273.15;
+    }
+}
+
+let temp = new Temperature(100);
+println("  摄氏温度: ${temp.getCelsius()}");
+println("  华氏温度: ${temp.getFahrenheit()}");
+println("  开尔文温度: ${temp.getKelvin()}");
+
+temp.setCelsius(0);
+println("  更新后摄氏: ${temp.getCelsius()}");
+println("  更新后华氏: ${temp.getFahrenheit()}");
+
+// -------------------------------------------------------
+// 2) 带验证的 setter
+// -------------------------------------------------------
+println("\n--- 2) 带验证的 setter ---");
+
+class BankAccount {
+    function constructor(owner, balance) {
+        this.owner = owner;
+        this._balance = balance;
+        this._frozen = false;
+    }
+
+    function getBalance() {
+        return this._balance;
+    }
+
+    function deposit(amount) {
+        if (this._frozen) {
+            throw "账户已冻结，无法存款";
+        }
+        if (amount <= 0) {
+            throw "存款金额必须为正数";
+        }
+        this._balance = this._balance + amount;
+        println("  [setter] 存入 ${amount}，余额: ${this._balance}");
+    }
+
+    function withdraw(amount) {
+        if (this._frozen) {
+            throw "账户已冻结，无法取款";
+        }
+        if (amount <= 0) {
+            throw "取款金额必须为正数";
+        }
+        if (amount > this._balance) {
+            throw "余额不足";
+        }
+        this._balance = this._balance - amount;
+        println("  [setter] 取出 ${amount}，余额: ${this._balance}");
+    }
+
+    function freeze() {
+        this._frozen = true;
+        println("  [setter] 账户已冻结");
+    }
+
+    function isFrozen() {
+        return this._frozen;
+    }
+}
+
+let account = new BankAccount("Alice", 1000);
+println("  初始余额: ${account.getBalance()}");
+account.deposit(500);
+account.withdraw(200);
+println("  最终余额: ${account.getBalance()}");
+
+// -------------------------------------------------------
+// 3) 计算属性模式：派生值
+// -------------------------------------------------------
+println("\n--- 3) 计算属性 ---");
+
+class Rectangle {
+    function constructor(w, h) {
+        this.width = w;
+        this.height = h;
+    }
+
+    // 计算属性：面积
+    function area() {
+        return this.width * this.height;
+    }
+
+    // 计算属性：周长
+    function perimeter() {
+        return 2 * (this.width + this.height);
+    }
+
+    // 计算属性：对角线长度
+    function diagonal() {
+        let w2 = this.width * this.width;
+        let h2 = this.height * this.height;
+        // 使用牛顿法近似平方根
+        let guess = (this.width + this.height) / 2;
+        let i = 0;
+        while (i < 10) {
+            guess = (guess + (w2 + h2) / guess) / 2;
+            i = i + 1;
+        }
+        return guess;
+    }
+}
+
+let rect = new Rectangle(3, 4);
+println("  宽: ${rect.width}, 高: ${rect.height}");
+println("  面积: ${rect.area()}");
+println("  周长: ${rect.perimeter()}");
+println("  对角线: ${rect.diagonal()}");
+
+// -------------------------------------------------------
+// 4) 链式 setter（流式接口）
+// -------------------------------------------------------
+println("\n--- 4) 链式 setter ---");
+
+class QueryBuilder {
+    function constructor() {
+        this._table = "";
+        this._conditions = [];
+        this._limit = -1;
+    }
+
+    function table(name) {
+        this._table = name;
+        return this; // 返回 this 实现链式调用
+    }
+
+    function where(condition) {
+        this._conditions.push(condition);
+        return this;
+    }
+
+    function limit(n) {
+        this._limit = n;
+        return this;
+    }
+
+    function build() {
+        let sql = "SELECT * FROM " + this._table;
+        if (this._conditions.len() > 0) {
+            sql = sql + " WHERE " + this._conditions.join(" AND ");
+        }
+        if (this._limit > 0) {
+            sql = sql + " LIMIT " + this._limit;
+        }
+        return sql;
+    }
+}
+
+let query = new QueryBuilder()
+    .table("users")
+    .where("age > 18")
+    .where("active = true")
+    .limit(10)
+    .build();
+println("  生成的查询: ${query}");
+
+println("\n=== 属性访问模式示例完成 ===");

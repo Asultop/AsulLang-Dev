@@ -1,0 +1,131 @@
+// match 模式匹配入门教程
+// 包含：字面量匹配、变量绑定、守卫子句、通配符、与 switch 对比
+
+println("== match 模式匹配入门教程 ==");
+
+// -------------------------------------------------------
+// 1) 基本字面量匹配：数字
+// -------------------------------------------------------
+println("\n--- 1) 数字字面量匹配 ---");
+
+let x = 2;
+match (x) {
+    case 1 -> { println("x 是 1"); }
+    case 2 -> { println("x 是 2"); }
+    case 3 -> { println("x 是 3"); }
+    default -> { println("x 是其他值"); }
+}
+
+// -------------------------------------------------------
+// 2) 字符串字面量匹配
+// -------------------------------------------------------
+println("\n--- 2) 字符串字面量匹配 ---");
+
+let status = "success";
+match (status) {
+    case "success" -> { println("操作成功！"); }
+    case "error" -> { println("操作失败！"); }
+    case "pending" -> { println("处理中..."); }
+    default -> { println("未知状态"); }
+}
+
+// -------------------------------------------------------
+// 3) 守卫子句（if guard）：在 case 中添加额外条件
+// -------------------------------------------------------
+println("\n--- 3) 守卫子句 ---");
+
+let num = 15;
+match (num) {
+    case 10 if num > 5 -> { println("10 且大于 5"); }
+    case 15 if num > 10 -> { println("15 且大于 10"); }
+    case 15 -> { println("只是 15"); }
+    default -> { println("其他数字"); }
+}
+
+// -------------------------------------------------------
+// 4) 通配符匹配（default）
+// -------------------------------------------------------
+println("\n--- 4) 通配符匹配 ---");
+
+let grade = 85;
+match (grade) {
+    case 100 -> { println("满分！"); }
+    case 90 if grade >= 90 -> { println("优秀"); }
+    case 80 if grade >= 80 -> { println("良好"); }
+    case 70 if grade >= 70 -> { println("中等"); }
+    case 60 if grade >= 60 -> { println("及格"); }
+    default -> { println("需要努力"); }
+}
+
+// -------------------------------------------------------
+// 5) 对象属性匹配
+// -------------------------------------------------------
+println("\n--- 5) 对象属性匹配 ---");
+
+let shape = { type: "circle", radius: 5 };
+match (shape.type) {
+    case "circle" -> { println("形状是圆形，半径: ${shape.radius}"); }
+    case "square" -> { println("形状是正方形"); }
+    case "triangle" -> { println("形状是三角形"); }
+    default -> { println("未知形状"); }
+}
+
+// -------------------------------------------------------
+// 6) 多语句块匹配
+// -------------------------------------------------------
+println("\n--- 6) 多语句块匹配 ---");
+
+let command = "start";
+match (command) {
+    case "start" -> {
+        println("  启动服务...");
+        println("  服务已启动");
+    }
+    case "stop" -> {
+        println("  停止服务...");
+        println("  服务已停止");
+    }
+    case "restart" -> {
+        println("  重启服务...");
+        println("  服务已重启");
+    }
+    default -> {
+        println("  未知命令: ${command}");
+    }
+}
+
+// -------------------------------------------------------
+// 7) match vs switch 对比
+// -------------------------------------------------------
+println("\n--- 7) match vs switch 对比 ---");
+
+let value = 42;
+
+// 使用 match
+println("match 写法:");
+match (value) {
+    case 42 -> { println("  答案是 42"); }
+    default -> { println("  其他值"); }
+}
+
+// 使用 switch（传统写法）
+println("switch 写法:");
+switch (value) {
+    case 42:
+        println("  答案是 42");
+        break;
+    default:
+        println("  其他值");
+        break;
+}
+
+// match 优势：支持守卫子句
+println("\nmatch 的守卫子句优势:");
+let n = 42;
+match (n) {
+    case 42 if n > 40 -> { println("  42 且大于 40"); }
+    case 42 -> { println("  只是 42"); }
+    default -> { println("  其他"); }
+}
+
+println("\n=== match 模式匹配教程完成 ===");

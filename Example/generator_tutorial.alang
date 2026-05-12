@@ -1,0 +1,119 @@
+// yield/generator 教程：演示生成器函数的用法
+// 说明：function* 声明生成器函数，yield 产出值
+// 注意：当前 ALang 的 yield 实现为基础版本（yield 直接求值为表达式结果），
+//       完整的惰性迭代需要运行时协程支持。
+
+println("== yield/generator 教程 ==");
+
+// -------------------------------------------------------
+// 1) function* 声明生成器函数
+// -------------------------------------------------------
+println("\n--- 1) 基本生成器函数 ---");
+
+function* countTo(n) {
+    let i = 1;
+    while (i <= n) {
+        yield i;
+        i = i + 1;
+    }
+}
+
+println("  生成器函数 countTo 已声明");
+
+// -------------------------------------------------------
+// 2) yield 值产出
+// -------------------------------------------------------
+println("\n--- 2) yield 值产出 ---");
+
+function* double(n) {
+    yield n * 2;
+}
+
+let result = ([]* (x) {
+    yield x * 3;
+})(10);
+println("  lambda 生成器 yield 结果: ${result}");
+
+// -------------------------------------------------------
+// 3) yield* 委托生成器
+// -------------------------------------------------------
+println("\n--- 3) yield* 委托 ---");
+
+function* inner() {
+    yield 1;
+    yield 2;
+    yield 3;
+}
+
+function* outer() {
+    yield* inner();
+    yield 4;
+}
+
+println("  yield* 委托语法已声明");
+
+// -------------------------------------------------------
+// 4) 生成器作为值传递
+// -------------------------------------------------------
+println("\n--- 4) 生成器函数作为值 ---");
+
+function* fibonacci(n) {
+    let a = 0;
+    let b = 1;
+    let i = 0;
+    while (i < n) {
+        yield a;
+        let temp = a + b;
+        a = b;
+        b = temp;
+        i = i + 1;
+    }
+}
+
+println("  fibonacci 生成器函数已声明");
+println("  （可在需要惰性求值的场景中使用）");
+
+// -------------------------------------------------------
+// 5) 生成器与普通函数对比
+// -------------------------------------------------------
+println("\n--- 5) 生成器 vs 普通函数 ---");
+
+// 普通函数：一次性返回所有结果
+function rangeArray(n) {
+    let arr = [];
+    let i = 0;
+    while (i < n) {
+        arr.push(i);
+        i = i + 1;
+    }
+    return arr;
+}
+
+// 生成器函数：按需产出值（节省内存）
+function* rangeGen(n) {
+    let i = 0;
+    while (i < n) {
+        yield i;
+        i = i + 1;
+    }
+}
+
+let arr = rangeArray(5);
+println("  普通函数 rangeArray(5): ${arr}");
+println("  生成器 rangeGen(5) 已声明（惰性产出）");
+
+// -------------------------------------------------------
+// 6) 生成器 Lambda
+// -------------------------------------------------------
+println("\n--- 6) 生成器 Lambda ---");
+
+let genLambda = []* (x) {
+    yield x;
+    yield x * 2;
+    yield x * 3;
+};
+
+println("  生成器 Lambda 已创建");
+println("  调用 genLambda(5) = ${genLambda(5)}");
+
+println("\n=== generator 教程完成 ===");

@@ -1,0 +1,166 @@
+// 异常处理完整教程：演示 try/catch/finally 的全部用法
+// 包含：基本 try/catch、try/catch/finally、throw、嵌套异常、异常对象属性
+
+println("== 异常处理完整教程 ==");
+
+// -------------------------------------------------------
+// 1) 基本 try/catch
+// -------------------------------------------------------
+println("\n--- 1) 基本 try/catch ---");
+
+try {
+    throw "一个简单的错误信息";
+    println("这行不会执行");
+} catch (e) {
+    println("捕获到异常: ${e}");
+}
+
+// -------------------------------------------------------
+// 2) try/catch/finally：无论是否异常都会执行 finally
+// -------------------------------------------------------
+println("\n--- 2) try/catch/finally ---");
+
+try {
+    println("  try 块执行");
+    throw "发生错误";
+} catch (e) {
+    println("  catch 块: ${e}");
+} finally {
+    println("  finally 块（始终执行）");
+}
+
+// 无异常时 finally 也会执行
+try {
+    println("  try 块正常执行，无异常");
+} catch (e) {
+    println("  不会执行");
+} finally {
+    println("  finally 块（无异常时也执行）");
+}
+
+// -------------------------------------------------------
+// 3) throw 抛出对象类型异常
+// -------------------------------------------------------
+println("\n--- 3) throw 抛出对象异常 ---");
+
+function divide(a, b) {
+    if (b == 0) {
+        throw { code: 400, msg: "除数不能为零" };
+    }
+    return a / b;
+}
+
+try {
+    let result = divide(10, 0);
+    println("结果: ${result}");
+} catch (e) {
+    println("错误码: ${e.code}");
+    println("错误信息: ${e.msg}");
+}
+
+// -------------------------------------------------------
+// 4) throw 抛出字符串异常
+// -------------------------------------------------------
+println("\n--- 4) throw 抛出字符串异常 ---");
+
+function validateAge(age) {
+    if (age < 0) {
+        throw "年龄不能为负数";
+    }
+    if (age > 150) {
+        throw "年龄不合理";
+    }
+    return true;
+}
+
+try {
+    validateAge(-5);
+} catch (e) {
+    println("验证失败: ${e}");
+}
+
+// -------------------------------------------------------
+// 5) 嵌套 try/catch：内层优先捕获
+// -------------------------------------------------------
+println("\n--- 5) 嵌套 try/catch ---");
+
+try {
+    println("  外层 try 开始");
+    try {
+        println("  内层 try 开始");
+        throw "内层异常";
+    } catch (inner) {
+        println("  内层 catch: ${inner}");
+        throw "外层异常（由内层重新抛出）";
+    }
+} catch (outer) {
+    println("  外层 catch: ${outer}");
+}
+
+// -------------------------------------------------------
+// 6) 异常对象属性：message, line, column, stack
+// -------------------------------------------------------
+println("\n--- 6) 异常对象属性 ---");
+
+function level3() {
+    throw "深层异常";
+}
+
+function level2() {
+    level3();
+}
+
+function level1() {
+    level2();
+}
+
+try {
+    level1();
+} catch (e) {
+    println("  message: ${e.message}");
+    println("  line: ${e.line}, column: ${e.column}");
+    println("  stack 长度: ${e.stack.len()}");
+    println("  顶层栈帧: ${e.stack[0]}");
+}
+
+// -------------------------------------------------------
+// 7) try/finally（无 catch）：仅做清理
+// -------------------------------------------------------
+println("\n--- 7) try/finally（无 catch）---");
+
+function riskyOperation() {
+    throw "操作失败";
+}
+
+try {
+    riskyOperation();
+} finally {
+    println("  清理资源（无论是否异常）");
+}
+
+// -------------------------------------------------------
+// 8) 实际应用：带资源管理的异常处理
+// -------------------------------------------------------
+println("\n--- 8) 实际应用场景 ---");
+
+function processFile(filename) {
+    println("  打开文件: ${filename}");
+    try {
+        if (filename == "missing.txt") {
+            throw "文件不存在: " + filename;
+        }
+        println("  处理文件内容...");
+        return "文件内容";
+    } catch (e) {
+        println("  处理出错: ${e}");
+        return null;
+    } finally {
+        println("  关闭文件: ${filename}");
+    }
+}
+
+processFile("data.txt");
+println("");
+processFile("missing.txt");
+
+println("\n=== 异常处理教程完成 ===");

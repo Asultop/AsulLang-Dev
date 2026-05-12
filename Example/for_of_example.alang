@@ -1,0 +1,181 @@
+// foreach 高级遍历教程：演示 ALang 中各种数据结构的遍历方式
+// 包含：遍历数组、对象键值、字符串字符、Map/Set、嵌套遍历
+
+println("== foreach 遍历教程 ==");
+
+// -------------------------------------------------------
+// 1) 遍历数组
+// -------------------------------------------------------
+println("\n--- 1) 遍历数组 ---");
+
+let fruits = ["苹果", "香蕉", "橙子", "葡萄"];
+println("  水果列表:");
+foreach (fruit in fruits) {
+    println("    - ${fruit}");
+}
+
+// 带索引的遍历（使用 while 模拟）
+println("\n  带索引遍历:");
+let i = 0;
+while (i < fruits.len()) {
+    println("    ${i}: ${fruits[i]}");
+    i = i + 1;
+}
+
+// -------------------------------------------------------
+// 2) 遍历对象键值
+// -------------------------------------------------------
+println("\n--- 2) 遍历对象键值 ---");
+
+let person = {
+    name: "张三",
+    age: 25,
+    city: "北京",
+    job: "工程师"
+};
+
+println("  个人信息:");
+foreach (key in person) {
+    println("    ${key}: ${person[key]}");
+}
+
+// -------------------------------------------------------
+// 3) 遍历字符串字符
+// -------------------------------------------------------
+println("\n--- 3) 遍历字符串字符 ---");
+
+let greeting = "Hello";
+println("  字符串 '${greeting}' 的每个字符:");
+foreach (ch in greeting) {
+    println("    '${ch}'");
+}
+
+// -------------------------------------------------------
+// 4) 遍历 Map
+// -------------------------------------------------------
+println("\n--- 4) 遍历 Map ---");
+
+import std.collections.*;
+
+let scores = map();
+scores.set("数学", 95);
+scores.set("语文", 88);
+scores.set("英语", 92);
+
+println("  Map 条目:");
+let keys = scores.keys();
+let vals = scores.values();
+println("    键: ${keys}");
+println("    值: ${vals}");
+println("    条目: ${scores.entries()}");
+
+// -------------------------------------------------------
+// 5) 遍历 Set
+// -------------------------------------------------------
+println("\n--- 5) 遍历 Set ---");
+
+let uniqueNums = set();
+uniqueNums.add(10);
+uniqueNums.add(20);
+uniqueNums.add(30);
+uniqueNums.add(10); // 重复添加
+
+println("  Set 中的值:");
+foreach (v in uniqueNums.values()) {
+    println("    ${v}");
+}
+
+// -------------------------------------------------------
+// 6) 嵌套遍历：二维数组
+// -------------------------------------------------------
+println("\n--- 6) 嵌套遍历：二维数组 ---");
+
+let matrix = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9]
+];
+
+println("  矩阵:");
+foreach (row in matrix) {
+    let line = "    ";
+    foreach (cell in row) {
+        line = line + cell + " ";
+    }
+    println(line);
+}
+
+// -------------------------------------------------------
+// 7) 嵌套遍历：对象数组
+// -------------------------------------------------------
+println("\n--- 7) 嵌套遍历：对象数组 ---");
+
+let classrooms = [
+    { name: "一年级", students: ["小明", "小红"] },
+    { name: "二年级", students: ["小刚", "小丽", "小华"] }
+];
+
+foreach (cls in classrooms) {
+    println("  ${cls.name}:");
+    foreach (student in cls.students) {
+        println("    - ${student}");
+    }
+}
+
+// -------------------------------------------------------
+// 8) 遍历中的 break 和 continue
+// -------------------------------------------------------
+println("\n--- 8) break 和 continue ---");
+
+let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+// break：找到第一个大于 5 的数就停止
+println("  break 示例（找 > 5 的数）:");
+foreach (n in numbers) {
+    if (n > 5) {
+        println("    找到: ${n}，停止遍历");
+        break;
+    }
+}
+
+// continue：跳过偶数
+println("  continue 示例（只打印奇数）:");
+let oddLine = "    ";
+foreach (n in numbers) {
+    if (n % 2 == 0) {
+        continue;
+    }
+    oddLine = oddLine + n + " ";
+}
+println(oddLine);
+
+// -------------------------------------------------------
+// 9) 实际应用：统计与过滤
+// -------------------------------------------------------
+println("\n--- 9) 实际应用 ---");
+
+// 统计字符频率
+let text = "hello world";
+let freq = {};
+foreach (ch in text) {
+    if (freq[ch] == null) {
+        freq[ch] = 0;
+    }
+    freq[ch] = freq[ch] + 1;
+}
+println("  字符频率（'${text}'）:");
+foreach (key in freq) {
+    println("    '${key}': ${freq[key]}");
+}
+
+// 扁平化嵌套数组
+let nested = [[1, 2], [3, 4], [5, 6]];
+let flat = [];
+foreach (sub in nested) {
+    foreach (item in sub) {
+        flat.push(item);
+    }
+}
+println("\n  扁平化: ${flat}");
+
+println("\n=== foreach 遍历教程完成 ===");

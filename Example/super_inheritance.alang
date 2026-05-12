@@ -1,0 +1,202 @@
+// super 关键字教程：演示子类调用父类方法
+// 包含：super.method 语法、多继承中的 super、constructor 链式调用
+
+println("== super 关键字教程 ==");
+
+// -------------------------------------------------------
+// 1) 基本 super.method：子类调用父类方法
+// -------------------------------------------------------
+println("\n--- 1) 基本 super.method ---");
+
+class Animal {
+    function constructor(name) {
+        this.name = name;
+    }
+
+    function speak() {
+        println("  ${this.name} 发出声音");
+    }
+
+    function describe() {
+        return "动物: " + this.name;
+    }
+}
+
+class Dog <- Animal {
+    function constructor(name, breed) {
+        // 调用父类 constructor
+        super.constructor(name);
+        this.breed = breed;
+    }
+
+    function speak() {
+        // 调用父类的 speak 方法
+        super.speak();
+        println("  ${this.name} (${this.breed}) 汪汪叫");
+    }
+
+    function describe() {
+        let base = super.describe();
+        return base + ", 品种: " + this.breed;
+    }
+}
+
+let dog = new Dog("旺财", "金毛");
+dog.speak();
+println("  ${dog.describe()}");
+
+// -------------------------------------------------------
+// 2) 多层继承中的 super
+// -------------------------------------------------------
+println("\n--- 2) 多层继承 ---");
+
+class Shape {
+    function constructor(color) {
+        this.color = color;
+    }
+
+    function info() {
+        return "颜色: " + this.color;
+    }
+}
+
+class Circle <- Shape {
+    function constructor(color, radius) {
+        super.constructor(color);
+        this.radius = radius;
+    }
+
+    function info() {
+        let base = super.info();
+        return base + ", 半径: " + this.radius;
+    }
+
+    function area() {
+        // 近似 pi * r^2
+        let pi = 3.14159;
+        return pi * this.radius * this.radius;
+    }
+}
+
+class ColoredCircle <- Circle {
+    function constructor(color, radius, opacity) {
+        super.constructor(color, radius);
+        this.opacity = opacity;
+    }
+
+    function info() {
+        let base = super.info();
+        return base + ", 透明度: " + this.opacity;
+    }
+}
+
+let cc = new ColoredCircle("红色", 5, 0.8);
+println("  ${cc.info()}");
+println("  面积: ${cc.area()}");
+
+// -------------------------------------------------------
+// 3) 多继承中的 super：按声明顺序查找
+// -------------------------------------------------------
+println("\n--- 3) 多继承中的 super ---");
+
+class Logger {
+    function log(msg) {
+        println("  [LOG] ${msg}");
+    }
+}
+
+class Serializable {
+    function serialize() {
+        return "{ serialized: true }";
+    }
+}
+
+class Model <- (Logger, Serializable) {
+    function constructor(data) {
+        this.data = data;
+    }
+
+    function save() {
+        super.log("保存数据: " + this.data);
+        let json = super.serialize();
+        println("  序列化结果: ${json}");
+    }
+}
+
+let model = new Model("用户数据");
+model.save();
+
+// -------------------------------------------------------
+// 4) extends 扩展中使用 super
+// -------------------------------------------------------
+println("\n--- 4) extends 扩展中的 super ---");
+
+class Base {
+    function greet() {
+        return "你好";
+    }
+}
+
+class Child <- Base {
+    function greet() {
+        let base = super.greet();
+        return base + "，世界！";
+    }
+}
+
+// 扩展 Child，添加新方法并调用原有方法
+extends Child {
+    function formalGreet() {
+        let informal = super.greet();
+        return "[正式] " + informal;
+    }
+}
+
+let child = new Child();
+println("  ${child.greet()}");
+println("  ${child.formalGreet()}");
+
+// -------------------------------------------------------
+// 5) super 调用父类 constructor 链
+// -------------------------------------------------------
+println("\n--- 5) constructor 链式调用 ---");
+
+class Vehicle {
+    function constructor(make, year) {
+        this.make = make;
+        this.year = year;
+    }
+
+    function details() {
+        return this.make + " " + this.year;
+    }
+}
+
+class Car <- Vehicle {
+    function constructor(make, year, doors) {
+        super.constructor(make, year);
+        this.doors = doors;
+    }
+
+    function details() {
+        let base = super.details();
+        return base + ", " + this.doors + "门";
+    }
+}
+
+class SportsCar <- Car {
+    function constructor(make, year, doors, topSpeed) {
+        super.constructor(make, year, doors);
+        this.topSpeed = topSpeed;
+    }
+
+    function details() {
+        let base = super.details();
+        return base + ", 最高时速: " + this.topSpeed + "km/h";
+    }
+}
+
+let sc = new SportsCar("法拉利", 2024, 2, 350);
+println("  ${sc.details()}");
+
+println("\n=== super 关键字教程完成 ===");

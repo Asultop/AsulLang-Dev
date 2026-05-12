@@ -1,0 +1,174 @@
+// async/await 教程：演示 ALang 异步编程的完整用法
+// 包含：async 函数、await 等待、Promise.all/race/any、go 语句
+
+println("== async/await 教程 ==");
+
+// -------------------------------------------------------
+// 1) 基本 async 函数声明与 await
+// -------------------------------------------------------
+println("\n--- 1) 基本 async/await ---");
+
+async function fetchUser(id) {
+    println("  开始获取用户 ${id}...");
+    await sleep(100); // 模拟异步操作
+    println("  用户 ${id} 获取完成");
+    return { id: id, name: "用户" + id };
+}
+
+async function showUser() {
+    let user = await fetchUser(1);
+    println("  获取到用户: ${user.name}");
+}
+
+let p = showUser();
+p.then([](v) {
+    println("  showUser 完成");
+});
+
+// -------------------------------------------------------
+// 2) Promise 链式调用：then / catch
+// -------------------------------------------------------
+println("\n--- 2) Promise 链式调用 ---");
+
+Promise.resolve(10)
+    .then([](v) {
+        println("  第一步: ${v}");
+        return v * 2;
+    })
+    .then([](v) {
+        println("  第二步: ${v}");
+        return v + 5;
+    })
+    .then([](v) {
+        println("  第三步: ${v}");
+        return v;
+    })
+    .catch([](e) {
+        println("  链式调用出错: ${e}");
+        return 0;
+    });
+
+// -------------------------------------------------------
+// 3) Promise.reject 与 catch 捕获
+// -------------------------------------------------------
+println("\n--- 3) Promise.reject 与 catch ---");
+
+Promise.reject("网络超时")
+    .then([](v) {
+        println("  不会执行: ${v}");
+        return v;
+    })
+    .catch([](e) {
+        println("  捕获到拒绝: ${e}");
+        return "默认值";
+    })
+    .then([](v) {
+        println("  恢复后继续: ${v}");
+        return v;
+    });
+
+// -------------------------------------------------------
+// 4) Promise.all：等待所有 Promise 完成
+// -------------------------------------------------------
+println("\n--- 4) Promise.all ---");
+
+async function taskA() {
+    await sleep(50);
+    return "A";
+}
+async function taskB() {
+    await sleep(80);
+    return "B";
+}
+async function taskC() {
+    await sleep(30);
+    return "C";
+}
+
+let allPromise = Promise.all([taskA(), taskB(), taskC()]);
+allPromise.then([](results) {
+    println("  Promise.all 结果: ${results}");
+}).catch([](e) {
+    println("  Promise.all 出错: ${e}");
+});
+
+// -------------------------------------------------------
+// 5) Promise.race：取最先完成的结果
+// -------------------------------------------------------
+println("\n--- 5) Promise.race ---");
+
+async function fast() {
+    await sleep(20);
+    return "快速任务";
+}
+async function slow() {
+    await sleep(200);
+    return "慢速任务";
+}
+
+let racePromise = Promise.race([fast(), slow()]);
+racePromise.then([](v) {
+    println("  Promise.race 获胜者: ${v}");
+});
+
+// -------------------------------------------------------
+// 6) Promise.any：取最先成功的结果
+// -------------------------------------------------------
+println("\n--- 6) Promise.any ---");
+
+async function mayFail() {
+    await sleep(30);
+    return "成功任务";
+}
+
+let anyPromise = Promise.any([mayFail()]);
+anyPromise.then([](v) {
+    println("  Promise.any 结果: ${v}");
+});
+
+// -------------------------------------------------------
+// 7) go 语句：异步投递任务到事件循环
+// -------------------------------------------------------
+println("\n--- 7) go 语句 ---");
+
+async function backgroundJob(n) {
+    println("  后台任务 ${n} 开始");
+    await sleep(60);
+    println("  后台任务 ${n} 完成");
+    return n * 10;
+}
+
+go backgroundJob(1); // 非阻塞投递
+go backgroundJob(2);
+go backgroundJob(3);
+
+println("  (go 语句已投递，脚本继续执行)");
+
+// -------------------------------------------------------
+// 8) async 函数链式调用
+// -------------------------------------------------------
+println("\n--- 8) async 函数链式调用 ---");
+
+async function doubleAsync(v) {
+    await sleep(20);
+    return v * 2;
+}
+
+async function addTenAsync(v) {
+    await sleep(20);
+    return v + 10;
+}
+
+async function chainedDemo() {
+    let step1 = await doubleAsync(5);
+    println("  doubleAsync(5) = ${step1}");
+    let step2 = await addTenAsync(step1);
+    println("  addTenAsync(${step1}) = ${step2}");
+    return step2;
+}
+
+chainedDemo().then([](result) {
+    println("  链式调用最终结果: ${result}");
+});
+
+println("\n(脚本执行结束，事件循环将触发等待中的异步任务)");
