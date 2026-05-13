@@ -4,7 +4,7 @@ import {
 	CompletionItemKind,
 	TextDocumentPositionParams
 } from 'vscode-languageserver/node';
-import { KEYWORDS, symbolTable } from './symbols';
+import { KEYWORDS, symbolTable, TYPES, BUILTIN_FUNCTIONS, SymbolInfo } from './symbols';
 
 export function registerCompletionHandlers(connection: Connection): void {
 	connection.onCompletion(
@@ -17,6 +17,25 @@ export function registerCompletionHandlers(connection: Connection): void {
 					label: keyword,
 					kind: CompletionItemKind.Keyword,
 					data: keyword
+				});
+			});
+
+			// Add built-in types
+			TYPES.forEach(type => {
+				items.push({
+					label: type,
+					kind: CompletionItemKind.TypeParameter,
+					data: type
+				});
+			});
+
+			// Add built-in functions
+			BUILTIN_FUNCTIONS.forEach(fn => {
+				items.push({
+					label: fn.name,
+					kind: CompletionItemKind.Function,
+					detail: fn.detail,
+					data: fn.name
 				});
 			});
 
@@ -46,6 +65,10 @@ export function registerCompletionHandlers(connection: Connection): void {
 			if (KEYWORDS.has(item.data)) {
 				item.detail = 'ALang keyword';
 				item.documentation = `ALang keyword: ${item.data}`;
+			} else if (TYPES.has(item.data)) {
+				item.detail = 'ALang built-in type';
+			} else if (typeof item.detail === 'string' && item.detail.includes('(')) {
+				// Already has detail
 			}
 			return item;
 		}

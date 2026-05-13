@@ -19,6 +19,8 @@ import { setHasConfigurationCapability, registerSettingsHandlers } from './setti
 import { createValidator } from './validation';
 import { registerCompletionHandlers } from './completion';
 import { registerDefinitionHandler } from './definition';
+import { registerHoverHandler } from './hover';
+import { registerDocumentSymbolHandler } from './documentSymbols';
 
 const connection = createConnection(ProposedFeatures.all);
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
@@ -35,9 +37,11 @@ connection.onInitialize((params: InitializeParams) => {
 		capabilities: {
 			textDocumentSync: TextDocumentSyncKind.Incremental,
 			definitionProvider: true,
+			hoverProvider: true,
+			documentSymbolProvider: true,
 			completionProvider: {
 				resolveProvider: true,
-				triggerCharacters: ['.', '@']
+				triggerCharacters: ['.', '@', '(']
 			}
 		}
 	};
@@ -67,6 +71,8 @@ const validate = createValidator(connection, documents);
 registerSettingsHandlers(connection, documents, validate);
 registerCompletionHandlers(connection);
 registerDefinitionHandler(connection, documents);
+registerHoverHandler(connection, documents);
+registerDocumentSymbolHandler(connection, documents);
 
 documents.onDidChangeContent(change => {
 	validate(change.document);

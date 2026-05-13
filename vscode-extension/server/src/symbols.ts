@@ -2,14 +2,36 @@ import { Location, Range, TextDocument } from 'vscode-languageserver/node';
 
 export const KEYWORDS = new Set([
 	'let', 'var', 'const', 'function', 'fn', 'return',
-	'if', 'else', 'while', 'do', 'for', 'foreach', 'in',
+	'if', 'else', 'while', 'do', 'for', 'foreach', 'in', 'of',
 	'break', 'continue', 'switch', 'case', 'default',
 	'class', 'interface', 'extends', 'new', 'static',
+	'public', 'private', 'protected',
 	'async', 'await', 'go',
 	'try', 'catch', 'finally', 'throw',
 	'import', 'from', 'as', 'export',
-	'match', 'yield', 'true', 'false', 'null'
+	'match', 'yield', 'super', 'this',
+	'true', 'false', 'null', 'undefined'
 ]);
+
+export const TYPES = new Set([
+	'string', 'number', 'boolean', 'array', 'object', 'any', 'void', 'null'
+]);
+
+export const BUILTIN_FUNCTIONS = [
+	{ name: 'print', detail: 'print(...args)' },
+	{ name: 'println', detail: 'println(...args)' },
+	{ name: 'len', detail: 'len(obj)' },
+	{ name: 'sleep', detail: 'sleep(ms)' },
+	{ name: 'eval', detail: 'eval(code)' },
+	{ name: 'quote', detail: 'quote(code)' },
+	{ name: 'push', detail: 'push(arr, ...vals)' },
+	{ name: 'map', detail: 'arr.map(fn)' },
+	{ name: 'filter', detail: 'arr.filter(fn)' },
+	{ name: 'reduce', detail: 'arr.reduce(fn, init)' },
+	{ name: 'Promise', detail: 'new Promise(fn)' },
+	{ name: 'Object', detail: 'Object methods' },
+	{ name: 'Array', detail: 'Array methods' }
+];
 
 export interface SymbolInfo {
 	name: string;
