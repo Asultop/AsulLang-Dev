@@ -41,7 +41,7 @@ connection.onInitialize((params: InitializeParams) => {
 			documentSymbolProvider: true,
 			completionProvider: {
 				resolveProvider: true,
-				triggerCharacters: ['.', '@', '(']
+				triggerCharacters: ['.', '@', '(', ' ']
 			}
 		}
 	};
