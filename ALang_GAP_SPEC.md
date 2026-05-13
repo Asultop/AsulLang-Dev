@@ -45,9 +45,9 @@
 - [x] 反射 API（获取类方法/字段列表）
 
 ### 4.3 低优先级
-- [ ] async generator + for-await-of
-- [ ] 管道运算符 |>
-- [ ] Proxy/Handler
+- [x] async generator + for-await-of
+- [x] 管道运算符 |>
+- [x] Proxy/Handler
 
 ## 五、缺失示例文件
 
