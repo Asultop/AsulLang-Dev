@@ -974,7 +974,7 @@ public:
 			Value leftVal = evaluate(pipe->left);
 			Value rightVal = evaluate(pipe->right);
 			if (!std::holds_alternative<std::shared_ptr<Function>>(rightVal)) {
-				std::ostringstream oss; oss << "Pipe operator expects a function on the right side at line " << pipe->left->line << ", column " << pipe->left->column; throw std::runtime_error(oss.str());
+				std::ostringstream oss; oss << "Pipe operator expects a function on the right side at line " << pipe->line << ", column " << pipe->column; throw std::runtime_error(oss.str());
 			}
 			auto fn = std::get<std::shared_ptr<Function>>(rightVal);
 			std::vector<Value> args{leftVal};
@@ -2027,6 +2027,32 @@ public:
 		return p->result;
 	}
 
+	// Overload: call a Function object directly with args
+	Value callFunction(std::shared_ptr<Function> fn, const std::vector<Value>& args) {
+		if (fn->isBuiltin) {
+			return fn->builtin(args, fn->closure);
+		}
+		if (args.size() < fn->params.size() - (fn->restParamIndex >= 0 ? 1 : 0)) {
+			std::ostringstream oss; oss << "callFunction: expected at least " << (fn->params.size() - (fn->restParamIndex >= 0 ? 1 : 0)) << " arguments but got " << args.size(); throw std::runtime_error(oss.str());
+		}
+		auto local = std::make_shared<Environment>(fn->closure);
+		size_t i = 0;
+		for (; i < args.size() && i < fn->params.size(); ++i) {
+			local->define(fn->params[i], args[i]);
+		}
+		for (; i < fn->params.size(); ++i) {
+			if (fn->defaultValues[i]) {
+				local->define(fn->params[i], evaluate(fn->defaultValues[i]));
+			} else {
+				local->define(fn->params[i], Value{std::monostate{}});
+			}
+		}
+		try {
+			executeBlock(fn->body, local);
+		} catch (const ReturnSignal& rs) { return rs.value; }
+		return Value{std::monostate{}};
+	}
+
 private:
 	std::shared_ptr<Environment> globals;
 	std::shared_ptr<Environment> env;
@@ -2049,6 +2075,82 @@ private:
 
 	// Lazy loading support
 	std::map<std::string, std::function<void(std::shared_ptr<Object>)>> lazyPackages;
+
+	// Proxy support functions (need access to executeBlock)
+	Value proxyGet(const Value& proxyVal, const std::string& prop) {
+		if (!std::holds_alternative<std::shared_ptr<Instance>>(proxyVal)) return Value{std::monostate{}};
+		auto inst = std::get<std::shared_ptr<Instance>>(proxyVal);
+		if (!inst) return Value{std::monostate{}};
+		auto it = inst->fields.find("_target");
+		if (it == inst->fields.end()) return Value{std::monostate{}};
+		auto handlerIt = inst->fields.find("_handler");
+		if (handlerIt == inst->fields.end()) return Value{std::monostate{}};
+		auto handlerInst = std::get_if<std::shared_ptr<Instance>>(&handlerIt->second);
+		if (!handlerInst || !*handlerInst) return Value{std::monostate{}};
+		auto getTrapIt = (*handlerInst)->fields.find("get");
+		if (getTrapIt == (*handlerInst)->fields.end()) {
+			auto targetInst = std::get_if<std::shared_ptr<Instance>>(&it->second);
+			if (!targetInst || !*targetInst) return Value{std::monostate{}};
+			auto propIt = (*targetInst)->fields.find(prop);
+			if (propIt == (*targetInst)->fields.end()) return Value{std::monostate{}};
+			return propIt->second;
+		}
+		auto getTrapFn = std::get_if<std::shared_ptr<Function>>(&getTrapIt->second);
+		if (!getTrapFn || !*getTrapFn) return Value{std::monostate{}};
+		auto fn = *getTrapFn;
+		auto local = std::make_shared<Environment>(fn->closure);
+		local->define("target", it->second);
+		local->define("prop", Value{prop});
+		if (fn->isBuiltin) {
+			return fn->builtin({ it->second, Value{prop} }, fn->closure);
+		}
+		Value result = std::monostate{};
+		auto prevEnv = fn->closure;
+		fn->closure = local;
+		try {
+			executeBlock(fn->body, local);
+		} catch (const ReturnSignal& rs) {
+			result = rs.value;
+		}
+		fn->closure = prevEnv;
+		return result;
+	}
+	bool proxySet(const Value& proxyVal, const std::string& prop, const Value& newVal) {
+		if (!std::holds_alternative<std::shared_ptr<Instance>>(proxyVal)) return false;
+		auto inst = std::get<std::shared_ptr<Instance>>(proxyVal);
+		if (!inst) return false;
+		auto it = inst->fields.find("_target");
+		if (it == inst->fields.end()) return false;
+		auto handlerIt = inst->fields.find("_handler");
+		if (handlerIt == inst->fields.end()) return false;
+		auto handlerInst = std::get_if<std::shared_ptr<Instance>>(&handlerIt->second);
+		if (!handlerInst || !*handlerInst) return false;
+		auto setTrapIt = (*handlerInst)->fields.find("set");
+		if (setTrapIt == (*handlerInst)->fields.end()) {
+			auto targetInst = std::get_if<std::shared_ptr<Instance>>(&it->second);
+			if (!targetInst || !*targetInst) return false;
+			(*targetInst)->fields[prop] = newVal;
+			return true;
+		}
+		auto setTrapFn = std::get_if<std::shared_ptr<Function>>(&setTrapIt->second);
+		if (!setTrapFn || !*setTrapFn) return false;
+		auto fn = *setTrapFn;
+		auto local = std::make_shared<Environment>(fn->closure);
+		local->define("target", it->second);
+		local->define("prop", Value{prop});
+		local->define("value", newVal);
+		if (fn->isBuiltin) {
+			fn->builtin({ it->second, Value{prop}, newVal }, fn->closure);
+			return true;
+		}
+		auto prevEnv = fn->closure;
+		fn->closure = local;
+		try {
+			executeBlock(fn->body, local);
+		} catch (const ReturnSignal&) {}
+		fn->closure = prevEnv;
+		return true;
+	}
 
 public:
 	bool loadLazyPackage(const std::string& name) {

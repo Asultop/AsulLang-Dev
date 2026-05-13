@@ -76,6 +76,7 @@ private:
 	ExprPtr conditional();
 	ExprPtr nullishCoalescing();
 	ExprPtr logicalOr();
+	ExprPtr pipe();
 	ExprPtr logicalAnd();
 	ExprPtr bitwiseOr();
 	ExprPtr bitwiseXor();

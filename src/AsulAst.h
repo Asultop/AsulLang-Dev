@@ -49,7 +49,7 @@ struct OptionalChainingExpr : Expr { ExprPtr object; std::string name; int line{
 struct YieldExpr : Expr { ExprPtr value; bool isDelegate{false}; int line{0}, column{1}, length{1}; YieldExpr(ExprPtr v, bool delegate, int l, int c0, int len): value(std::move(v)), isDelegate(delegate), line(l), column(c0), length(len){} };
 struct SuperExpr : Expr { std::string method; int line{0}, column{1}, length{1}; SuperExpr(std::string m, int l, int c, int len): method(std::move(m)), line(l), column(c), length(len){} };
 // Pipe operator: value |> fn (passes left value as argument to right function)
-struct PipeExpr : Expr { ExprPtr left; ExprPtr right; PipeExpr(ExprPtr l, ExprPtr r): left(std::move(l)), right(std::move(r)){} };
+struct PipeExpr : Expr { ExprPtr left; ExprPtr right; int line{0}, column{1}, length{1}; PipeExpr(ExprPtr l, ExprPtr r, int ln=0, int col=1, int len=1): left(std::move(l)), right(std::move(r)), line(ln), column(col), length(len){} };
 
 // Destructuring patterns
 struct DestructuringPattern {
