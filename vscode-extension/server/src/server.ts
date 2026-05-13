@@ -69,7 +69,7 @@ connection.onInitialized(() => {
 // Wire up features
 const validate = createValidator(connection, documents);
 registerSettingsHandlers(connection, documents, validate);
-registerCompletionHandlers(connection);
+registerCompletionHandlers(connection, documents);
 registerDefinitionHandler(connection, documents);
 registerHoverHandler(connection, documents);
 registerDocumentSymbolHandler(connection, documents);
