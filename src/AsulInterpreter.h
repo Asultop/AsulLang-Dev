@@ -353,6 +353,13 @@ public:
 				return v;
 			}
 			if (auto pins = std::get_if<std::shared_ptr<Instance>>(&ov)) {
+				// Check if this is a proxy
+				auto isProxyIt = (*pins)->fields.find("_isProxy");
+				if (isProxyIt != (*pins)->fields.end()) {
+					// Use proxySet to invoke handler traps
+					proxySet(ov, sp->name, v);
+					return v;
+				}
 				// Check for setter
 				if (*pins && (*pins)->klass) {
 					auto setter = findSetter((*pins)->klass, sp->name);
@@ -962,6 +969,26 @@ public:
 			bound->closure = thisEnv;
 			return Value{bound};
 		}
+		if (auto pipe = std::dynamic_pointer_cast<PipeExpr>(expr)) {
+			// value |> fn - passes left value as argument to right function
+			Value leftVal = evaluate(pipe->left);
+			Value rightVal = evaluate(pipe->right);
+			if (!std::holds_alternative<std::shared_ptr<Function>>(rightVal)) {
+				std::ostringstream oss; oss << "Pipe operator expects a function on the right side at line " << pipe->left->line << ", column " << pipe->left->column; throw std::runtime_error(oss.str());
+			}
+			auto fn = std::get<std::shared_ptr<Function>>(rightVal);
+			std::vector<Value> args{leftVal};
+			if (fn->isBuiltin) {
+				return fn->builtin(args, fn->closure);
+			}
+			// Call user-defined function
+			auto prevEnv = std::make_shared<Environment>(fn->closure);
+			auto prevFnEnv = fn->closure;
+			fn->closure = prevEnv;
+			Value result = callFunction(fn, args);
+			fn->closure = prevFnEnv;
+			return result;
+		}
 		if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
 			// derive callee name for stack trace
 			auto deriveName = [&](const ExprPtr& e)->std::string{
@@ -1523,6 +1550,62 @@ public:
 			}
 			return;
 		}
+		if (auto fao = std::dynamic_pointer_cast<ForAwaitOfStmt>(stmt)) {
+			// for await (varName of iterable) body
+			Value iterableValue = evaluate(fao->iterable);
+
+			// 创建新的作用域用于循环变量
+			auto loopEnv = std::make_shared<Environment>(env);
+			loopEnv->define(fao->varName, Value{std::monostate{}});
+
+			// 根据 iterable 类型进行迭代
+			if (auto arr = std::get_if<std::shared_ptr<std::vector<Value>>>(&iterableValue)) {
+				// 数组：遍历每个元素，对每个元素 await
+				for (const auto& elem : **arr) {
+					// await the element if it's a promise
+					Value awaitedElem = evaluateAwait(elem);
+					loopEnv->assign(fao->varName, awaitedElem);
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fao->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else if (auto obj = std::get_if<std::shared_ptr<std::unordered_map<std::string,Value>>>(&iterableValue)) {
+				// 对象：遍历每个键
+				for (const auto& [key, value] : **obj) {
+					Value awaitedValue = evaluateAwait(value);
+					loopEnv->assign(fao->varName, Value{key});
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fao->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else if (auto str = std::get_if<std::string>(&iterableValue)) {
+				// 字符串：遍历每个字符
+				for (char ch : *str) {
+					loopEnv->assign(fao->varName, Value{std::string(1, ch)});
+					try {
+						auto prevEnv = env;
+						env = loopEnv;
+						execute(fao->body);
+						env = prevEnv;
+					}
+					catch (const ContinueSignal&) { /* continue to next iteration */ }
+					catch (const BreakSignal&) { break; }
+				}
+			} else {
+				throw std::runtime_error("for-await-of requires an iterable (array, object, or string)");
+			}
+			return;
+		}
 		if (auto sw = std::dynamic_pointer_cast<SwitchStmt>(stmt)) {
 			// switch (expr) { case val: ... default: ... }
 			Value switchValue = evaluate(sw->expr);
@@ -1931,6 +2014,19 @@ public:
 		return Value{std::monostate{}};
 	}
 
+	// Helper to evaluate a value that may be a Promise (for for-await-of)
+	Value evaluateAwait(const Value& v) {
+		if (!std::holds_alternative<std::shared_ptr<PromiseState>>(v)) {
+			return v;
+		}
+		auto p = std::get<std::shared_ptr<PromiseState>>(v);
+		if (!p) return Value{std::monostate{}};
+		std::unique_lock<std::mutex> lk(p->mtx);
+		p->cv.wait(lk, [&]{ return p->settled; });
+		if (p->rejected) throw ExceptionSignal{ p->result };
+		return p->result;
+	}
+
 private:
 	std::shared_ptr<Environment> globals;
 	std::shared_ptr<Environment> env;
@@ -2268,6 +2364,16 @@ public:
 		return nullptr;
 	}
 	Value getProperty(const Value& obj, const std::string& name) {
+		// Check if this is a Proxy instance (has _isProxy marker)
+		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
+			if (*pins) {
+				auto isProxyIt = (*pins)->fields.find("_isProxy");
+				if (isProxyIt != (*pins)->fields.end()) {
+					// This is a proxy, use proxyGet to invoke handler traps
+					return proxyGet(obj, name);
+				}
+			}
+		}
 		// Instance: getters first, then fields, then methods
 		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
 			if (*pins) {

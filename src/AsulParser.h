@@ -61,6 +61,7 @@ private:
 	StmtPtr forStatement();
 	StmtPtr forEachStatement();
 	StmtPtr forOfStatement();
+	StmtPtr forAwaitOfStatement();
 	StmtPtr switchStatement();
 	StmtPtr matchStatement();
 	StmtPtr returnStatement();

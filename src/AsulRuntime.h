@@ -125,6 +125,99 @@ struct InstanceExt : Instance {
 	}
 };
 
+// ----------- Proxy -----------
+// Proxy holds a target object and a handler with traps
+struct ProxyInfo {
+	Value target;       // the target object
+	Value handler;      // the handler object with get/set traps
+};
+
+// Support function to get value from proxy (checks handler traps)
+inline Value proxyGet(const Value& proxyVal, const std::string& prop) {
+	if (!std::holds_alternative<std::shared_ptr<Instance>>(proxyVal)) return Value{std::monostate{}};
+	auto inst = std::get<std::shared_ptr<Instance>>(proxyVal);
+	if (!inst) return Value{std::monostate{}};
+	// Check if this instance is a proxy
+	auto it = inst->fields.find("_target");
+	if (it == inst->fields.end()) return Value{std::monostate{}};
+	// Look for get trap in handler
+	auto handlerIt = inst->fields.find("_handler");
+	if (handlerIt == inst->fields.end()) return Value{std::monostate{}};
+	auto handlerInst = std::get_if<std::shared_ptr<Instance>>(&handlerIt->second);
+	if (!handlerInst || !*handlerInst) return Value{std::monostate{}};
+	auto getTrapIt = (*handlerInst)->fields.find("get");
+	if (getTrapIt == (*handlerInst)->fields.end()) {
+		// No get trap, return direct property access
+		auto targetInst = std::get_if<std::shared_ptr<Instance>>(&it->second);
+		if (!targetInst || !*targetInst) return Value{std::monostate{}};
+		auto propIt = (*targetInst)->fields.find(prop);
+		if (propIt == (*targetInst)->fields.end()) return Value{std::monostate{}};
+		return propIt->second;
+	}
+	// Call the get trap: get(target, prop)
+	auto getTrapFn = std::get_if<std::shared_ptr<Function>>(&getTrapIt->second);
+	if (!getTrapFn || !*getTrapFn) return Value{std::monostate{}};
+	auto fn = *getTrapFn;
+	auto local = std::make_shared<Environment>(fn->closure);
+	local->define("target", it->second);
+	local->define("prop", Value{prop});
+	std::vector<Value> args{ it->second, Value{prop} };
+	if (fn->isBuiltin) {
+		return fn->builtin(args, fn->closure);
+	}
+	Value result = std::monostate{};
+	auto prevEnv = fn->closure;
+	fn->closure = local;
+	try {
+		execute(fn->body, local);
+	} catch (const ReturnSignal& rs) {
+		result = rs.value;
+	}
+	fn->closure = prevEnv;
+	return result;
+}
+
+// Support function to set value via proxy (checks handler traps)
+bool proxySet(const Value& proxyVal, const std::string& prop, const Value& newVal) {
+	if (!std::holds_alternative<std::shared_ptr<Instance>>(proxyVal)) return false;
+	auto inst = std::get<std::shared_ptr<Instance>>(proxyVal);
+	if (!inst) return false;
+	auto it = inst->fields.find("_target");
+	if (it == inst->fields.end()) return false;
+	auto handlerIt = inst->fields.find("_handler");
+	if (handlerIt == inst->fields.end()) return false;
+	auto handlerInst = std::get_if<std::shared_ptr<Instance>>(&handlerIt->second);
+	if (!handlerInst || !*handlerInst) return false;
+	auto setTrapIt = (*handlerInst)->fields.find("set");
+	if (setTrapIt == (*handlerInst)->fields.end()) {
+		// No set trap, direct property access
+		auto targetInst = std::get_if<std::shared_ptr<Instance>>(&it->second);
+		if (!targetInst || !*targetInst) return false;
+		(*targetInst)->fields[prop] = newVal;
+		return true;
+	}
+	// Call the set trap: set(target, prop, value) -> boolean
+	auto setTrapFn = std::get_if<std::shared_ptr<Function>>(&setTrapIt->second);
+	if (!setTrapFn || !*setTrapFn) return false;
+	auto fn = *setTrapFn;
+	auto local = std::make_shared<Environment>(fn->closure);
+	local->define("target", it->second);
+	local->define("prop", Value{prop});
+	local->define("value", newVal);
+	std::vector<Value> args{ it->second, Value{prop}, newVal };
+	if (fn->isBuiltin) {
+		fn->builtin(args, fn->closure);
+		return true;
+	}
+	auto prevEnv = fn->closure;
+	fn->closure = local;
+	try {
+		execute(fn->body, local);
+	} catch (const ReturnSignal&) {}
+	fn->closure = prevEnv;
+	return true;
+}
+
 // ----------- Stream Wrappers -----------
 struct StreamWrapper {
 	virtual size_t read(char* buf, size_t n) = 0;

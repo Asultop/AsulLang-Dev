@@ -48,6 +48,8 @@ struct AwaitExpr : Expr { ExprPtr expr; int line{0}, column{1}, length{1}; expli
 struct OptionalChainingExpr : Expr { ExprPtr object; std::string name; int line{0}, column{1}, length{1}; OptionalChainingExpr(ExprPtr o, std::string n, int l, int c0, int len): object(std::move(o)), name(std::move(n)), line(l), column(c0), length(len){} };
 struct YieldExpr : Expr { ExprPtr value; bool isDelegate{false}; int line{0}, column{1}, length{1}; YieldExpr(ExprPtr v, bool delegate, int l, int c0, int len): value(std::move(v)), isDelegate(delegate), line(l), column(c0), length(len){} };
 struct SuperExpr : Expr { std::string method; int line{0}, column{1}, length{1}; SuperExpr(std::string m, int l, int c, int len): method(std::move(m)), line(l), column(c), length(len){} };
+// Pipe operator: value |> fn (passes left value as argument to right function)
+struct PipeExpr : Expr { ExprPtr left; ExprPtr right; PipeExpr(ExprPtr l, ExprPtr r): left(std::move(l)), right(std::move(r)){} };
 
 // Destructuring patterns
 struct DestructuringPattern {
@@ -110,6 +112,7 @@ struct ContinueStmt : Stmt {};
 struct ForStmt : Stmt { StmtPtr init; ExprPtr cond; ExprPtr post; StmtPtr body; ForStmt(StmtPtr i, ExprPtr c, ExprPtr p, StmtPtr b): init(std::move(i)), cond(std::move(c)), post(std::move(p)), body(std::move(b)){} };
 struct ForEachStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForEachStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
 struct ForOfStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForOfStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
+struct ForAwaitOfStmt : Stmt { std::string varName; ExprPtr iterable; StmtPtr body; ForAwaitOfStmt(std::string v, ExprPtr i, StmtPtr b): varName(std::move(v)), iterable(std::move(i)), body(std::move(b)){} };
 struct SwitchStmt : Stmt {
 	struct CaseClause {
 		ExprPtr value; // null for default case

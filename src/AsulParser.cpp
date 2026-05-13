@@ -635,11 +635,15 @@ StmtPtr Parser::statement() {
 	if (match({TokenType::While})) return whileStatement();
 	if (match({TokenType::Do})) return doWhileStatement();
 	if (match({TokenType::For})) {
-		// Check if this is a for-of loop: for (var of iterable)
-		// Look ahead to see if we have: identifier of ...
+		// Check if this is a for-of loop: for (var of iterable) or for-await-of
 		size_t savedCurrent = current;
 		consume(TokenType::LeftParen, "'for' 后缺少 '('");
 		bool isForOf = false;
+		bool isForAwaitOf = false;
+		if (match({TokenType::Await})) {
+			// for await (var of iterable)
+			isForAwaitOf = true;
+		}
 		if (match({TokenType::Let, TokenType::Var, TokenType::Const}) || check(TokenType::Identifier)) {
 			if (!check(TokenType::Identifier)) advance(); // consume keyword
 			if (check(TokenType::Identifier)) {
@@ -650,6 +654,9 @@ StmtPtr Parser::statement() {
 			}
 		}
 		current = savedCurrent; // restore position
+		if (isForAwaitOf) {
+			return forAwaitOfStatement();
+		}
 		if (isForOf) {
 			return forOfStatement();
 		}
@@ -744,6 +751,24 @@ StmtPtr Parser::forOfStatement() {
 	auto body = statement();
 
 	return std::make_shared<ForOfStmt>(varName, iterable, body);
+}
+
+StmtPtr Parser::forAwaitOfStatement() {
+	// for await (varName of iterable) body
+	consume(TokenType::LeftParen, "'for' 后缺少 '('");
+	consume(TokenType::Await, "for-await-of 需要 'await' 关键字");
+	if (!check(TokenType::Identifier)) {
+		error("for-await-of 循环中缺少变量名");
+	}
+	std::string varName = advance().lexeme;
+
+	consume(TokenType::Of, "for-await-of 循环变量名后缺少 'of'");
+
+	ExprPtr iterable = expression();
+	consume(TokenType::RightParen, "for-await-of 子句后缺少 ')'");
+	auto body = statement();
+
+	return std::make_shared<ForAwaitOfStmt>(varName, iterable, body);
 }
 
 StmtPtr Parser::switchStatement() {
@@ -1068,11 +1093,21 @@ ExprPtr Parser::nullishCoalescing() {
 }
 
 ExprPtr Parser::logicalOr() {
-	auto expr = logicalAnd();
+	auto expr = pipe();
 	while (match({TokenType::OrOr})) {
 		Token op = previous();
-		auto right = logicalAnd();
+		auto right = pipe();
 		expr = std::make_shared<LogicalExpr>(expr, op, right);
+	}
+	return expr;
+}
+
+ExprPtr Parser::pipe() {
+	auto expr = logicalAnd();
+	while (match({TokenType::Pipe})) {
+		Token op = previous();
+		auto right = logicalAnd();
+		expr = std::make_shared<PipeExpr>(expr, right);
 	}
 	return expr;
 }

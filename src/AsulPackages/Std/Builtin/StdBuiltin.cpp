@@ -857,6 +857,53 @@ void registerStdBuiltinPackage(Interpreter& interp) {
 	};
 	globals->define("getIterator", getIteratorFn);
 
+	// Proxy class: new Proxy(target, handler)
+	auto proxyClass = std::make_shared<ClassInfo>();
+	proxyClass->name = "Proxy";
+	proxyClass->isNative = true;
+
+	auto proxyConstructor = std::make_shared<Function>();
+	proxyConstructor->isBuiltin = true;
+	proxyConstructor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+		if (args.size() != 2) throw std::runtime_error("Proxy 构造函数需要2个参数: target 和 handler");
+		Value target = args[0];
+		Value handler = args[1];
+
+		// Create a proxy instance that stores target and handler
+		auto proxyInst = std::make_shared<Instance>();
+		proxyInst->klass = std::make_shared<ClassInfo>();
+		proxyInst->klass->name = "Proxy";
+		proxyInst->fields["_isProxy"] = Value{true};
+		proxyInst->fields["_target"] = target;
+		proxyInst->fields["_handler"] = handler;
+		return Value{proxyInst};
+	};
+	proxyClass->methods["constructor"] = proxyConstructor;
+	globals->define("Proxy", Value{proxyClass});
+
+	// Handler class: new Handler(target) - creates a handler object with get/set traps
+	auto handlerClass = std::make_shared<ClassInfo>();
+	handlerClass->name = "Handler";
+	handlerClass->isNative = true;
+
+	auto handlerConstructor = std::make_shared<Function>();
+	handlerConstructor->isBuiltin = true;
+	handlerConstructor->builtin = [](const std::vector<Value>& args, std::shared_ptr<Environment> clos)->Value {
+		if (args.size() != 1) throw std::runtime_error("Handler 构造函数需要1个参数: target");
+		Value target = args[0];
+
+		auto handlerInst = std::make_shared<Instance>();
+		handlerInst->klass = std::make_shared<ClassInfo>();
+		handlerInst->klass->name = "Handler";
+		handlerInst->fields["target"] = target;
+		// Initialize empty get/set traps that can be overridden
+		handlerInst->fields["get"] = Value{std::make_shared<Function>()};
+		handlerInst->fields["set"] = Value{std::make_shared<Function>()};
+		return Value{handlerInst};
+	};
+	handlerClass->methods["constructor"] = handlerConstructor;
+	globals->define("Handler", Value{handlerClass});
+
 }
 
 } // namespace asul

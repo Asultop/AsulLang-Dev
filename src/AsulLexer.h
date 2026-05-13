@@ -13,7 +13,7 @@ enum class TokenType {
 	LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
 	Comma, Semicolon, Colon, Dot,
 	Plus, Minus, Star, Slash, Percent,
-	Ampersand, Pipe, Caret,
+	Ampersand, Pipe, PipeOperator, Caret,
 	Tilde,
 	Bang, Equal, Less, Greater, Question,
 	// One, two or three char

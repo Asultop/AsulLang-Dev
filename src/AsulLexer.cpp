@@ -318,6 +318,8 @@ void Lexer::scanToken() {
 		if (match('|')) {
 			if (match('=')) add(TokenType::OrOrEqual);
 			else add(TokenType::OrOr);
+		} else if (match('>')) {
+			add(TokenType::PipeOperator);
 		} else {
 			add(TokenType::Pipe);
 		}
