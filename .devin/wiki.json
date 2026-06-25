@@ -9,9 +9,7 @@
       "title": "概览",
       "purpose": "介绍 AsulLang/ALang 解释器、其作为可嵌入脚本语言的定位与高层架构",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "基于 C++17 的轻量脚本语言解释器，管线：词法分析 → 语法分析 → AST → 解释执行" }
       ]
     },
     {
@@ -19,9 +17,7 @@
       "purpose": "指导用户完成安装、运行第一个脚本，并使用 REPL",
       "parent": "概览",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "覆盖 REPL 交互模式与 -f 脚本执行模式" }
       ]
     },
     {
@@ -29,18 +25,14 @@
       "purpose": "在不同平台上编译 ALang 源码的详细步骤与依赖说明",
       "parent": "概览",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "CMake 构建，支持 Unix/Windows，可选依赖：OpenSSL、readline" }
       ]
     },
     {
       "title": "核心架构",
       "purpose": "深入解释器内部架构，包括编译/解析管线与运行时系统",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "" }
       ]
     },
     {
@@ -48,9 +40,15 @@
       "purpose": "说明分词过程与递归下降解析如何构建 AST",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "44+ Token 类型、36 关键字、递归下降解析器" }
+      ]
+    },
+    {
+      "title": "AST 节点体系",
+      "purpose": "记录完整的 AST 节点类型：24+ 表达式节点、18+ 语句节点、3 种解构模式",
+      "parent": "核心架构",
+      "page_notes": [
+        { "content": "Expr/Stmt 继承体系，shared_ptr 堆分配，详见 AsulAst.h" }
       ]
     },
     {
@@ -58,19 +56,15 @@
       "purpose": "详解 AST 解释器、语句/表达式求值与执行流程",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "evaluate() 处理表达式，execute() 处理语句，异常作为控制流信号" }
       ]
     },
     {
       "title": "类型系统与值表示",
-      "purpose": "记录动态类型系统、ValueTag 枚举及内部 Value 变体结构",
+      "purpose": "记录动态类型系统、ValueTag 变体结构与 10 种值类型",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "variant<monostate, double, string, bool, Function, Array, Object, ClassInfo, Instance, PromiseState>" }
       ]
     },
     {
@@ -78,9 +72,15 @@
       "purpose": "解释变量存储、作用域解析以及闭包的环境链机制",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "shared_ptr<Environment> parent 链实现词法作用域" }
+      ]
+    },
+    {
+      "title": "控制流信号机制",
+      "purpose": "记录 ReturnSignal/BreakSignal/ContinueSignal/ExceptionSignal 作为非局部跳出的实现",
+      "parent": "核心架构",
+      "page_notes": [
+        { "content": "C++ 异常作为有意设计的控制流信号" }
       ]
     },
     {
@@ -88,9 +88,7 @@
       "purpose": "详解事件循环架构、任务队列以及异步操作的调度",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": ""
-        }
+        { "content": "createPromise/resolve/reject/postTask 与解释器事件循环协作" }
       ]
     },
     {
@@ -98,257 +96,7 @@
       "purpose": "说明带彩色输出的错误格式化、上下文抽取与源码片段显示系统",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "语言参考",
-      "purpose": "完整覆盖 ALang 的语法、语义与内置特性",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "基础语法与类型",
-      "purpose": "覆盖原始类型、变量声明、运算符与基本表达式",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "控制流",
-      "purpose": "记录 if/else、while、for、foreach、switch/case、break/continue 与三元运算",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "函数与闭包",
-      "purpose": "说明函数声明、lambda 表达式、闭包、剩余参数与默认参数",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "数组与对象",
-      "purpose": "详解数组/对象字面量、索引、计算属性与展开运算符",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "字符串插值",
-      "purpose": "解释 ${expression} 语法以及字符串字面量中支持的表达式类型",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "类与面向对象",
-      "purpose": "覆盖类定义、构造器、方法、继承与 extends 关键字",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "接口与动态分派",
-      "purpose": "记录接口声明、结构化类型以及 =~= 接口匹配运算符",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "异步编程",
-      "purpose": "解释 async/await、Promise、then/catch、go 语句与事件循环交互",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "错误处理",
-      "purpose": "记录 throw 语句、try/catch 块与异常传播",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "注释与语法约定",
-      "purpose": "列出支持的注释风格（C++/C/Python）与语法约定（如可选分号）",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "标准库",
-      "purpose": "全面记录内置函数、方法与标准包",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "内置函数",
-      "purpose": "记录全局函数如 print、println、len、sleep、eval、keys、values 等",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "数组方法",
-      "purpose": "详述数组方法：map、filter、reduce、find、some、every、includes、sort 等",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "字符串方法",
-      "purpose": "记录字符串方法：split、substring、replace、trim、toLowerCase、toUpperCase 等",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "容器类",
-      "purpose": "说明 Map、Set、Stack、Deque、PriorityQueue 的构造与方法",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "std.math 包",
-      "purpose": "记录 std.math 包中的数学常量与函数",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "std.io 与文件系统",
-      "purpose": "记录文件 I/O、FileStream、File/Dir 类以及 std.path 工具",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "std.time 与日期/时间",
-      "purpose": "解释 Date 对象、时间格式化/解析、Duration 与时区支持",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "std.network 包",
-      "purpose": "记录 HTTP 客户端（get/post）、Socket API、URL 解析与服务端功能",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": ""
-        }
-      ]
-    },
-    {
-      "title": "位运算与优先级",
-      "purpose": "详解按位运算符、64 位补码行为与当前运算优先级",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": "覆盖 ~、&、|、^、<<、>>，以及与相等/接口匹配的优先级关系"
-        }
-      ]
-    },
-    {
-      "title": "接口匹配 =~=",
-      "purpose": "说明 =~= 运算符的语义、结构化匹配与用例",
-      "parent": "语言参考",
-      "page_notes": [
-        {
-          "content": "结合 Example/interfaceValidationTest.alang 展示"
-        }
-      ]
-    },
-    {
-      "title": "std.io.fileSystem 扩展",
-      "purpose": "系统化记录 File、Dir、FileStream 以及 mkdir/rmdir/stat/copy/move/chmod/walk 等 API",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": "与 ALang_Technical_Reference.md 的 4.x 文件系统扩展保持一致"
-        }
-      ]
-    },
-    {
-      "title": "JSON 包",
-      "purpose": "记录 json.stringify/json.parse 的行为、支持类型、错误处理与示例",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": "引用 Example/jsonExample.alang"
-        }
-      ]
-    },
-    {
-      "title": "操作系统包 os",
-      "purpose": "记录 os.call、getEnv、setEnv、exit、platform、arch 的用法与注意事项",
-      "parent": "标准库",
-      "page_notes": [
-        {
-          "content": "示例需说明 Promise 返回与异常场景"
-        }
+        { "content": "AsulFormatString/Color256 彩色输出，行号+列号+长度精确定位" }
       ]
     },
     {
@@ -356,9 +104,7 @@
       "purpose": "面向嵌入 C++ 的 Host API，包括 execute、registerFunction/class、setGlobal、callFunction、HostValue",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": "结合 ALangEngine.h/.cpp 说明典型嵌入用法"
-        }
+        { "content": "ALangEngine.h/.cpp Facade 门面层，HostValue 桥接 C++ 与 ALang 值" }
       ]
     },
     {
@@ -366,29 +112,436 @@
       "purpose": "梳理 src/ 下的模块划分与依赖关系图",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": "覆盖 AsulLexer/Parser/Runtime/Interpreter/Async/Packages 目录结构"
-        }
+        { "content": "AsulLexer/Parser/Runtime/Interpreter/Async/Packages，LSP 服务器在 AlangLsp.cpp" }
       ]
     },
     {
-      "title": "事件循环与 Promise",
-      "purpose": "阐述 createPromise/resolve/reject/postTask 与解释器事件循环的协作",
+      "title": "LSP 语言服务器",
+      "purpose": "记录 LSP 服务器功能：诊断、补全、跳转定义、查找引用、文档符号",
       "parent": "核心架构",
       "page_notes": [
-        {
-          "content": "面向包开发者的异步接口指南"
-        }
+        { "content": "AlangLsp.cpp 实现，支持 Hover、IntelliSense、内嵌函数信息" }
       ]
     },
     {
-      "title": "错误格式化与彩色输出",
-      "purpose": "记录错误上下文提取、彩色输出方案与源代码片段展示",
-      "parent": "核心架构",
+      "title": "语言参考",
+      "purpose": "完整覆盖 ALang 的语法、语义与内置特性",
       "page_notes": [
-        {
-          "content": "关联 AsulFormatString/Color256 的使用"
-        }
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "基础语法与类型",
+      "purpose": "覆盖原始类型、变量声明、运算符与基本表达式",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "类型：null、number、string、boolean、function、array、object、class、instance、promise" }
+      ]
+    },
+    {
+      "title": "控制流",
+      "purpose": "记录 if/else、while、do-while、for、foreach、for-of、for-await-of、switch/case、break/continue 与三元运算",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "支持 C 风格 for、增强 for-in/of、go 语句并发" }
+      ]
+    },
+    {
+      "title": "函数与闭包",
+      "purpose": "说明函数声明、lambda 表达式、闭包、剩余参数与默认参数",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "支持 rest 参数 (...args)、默认参数值、箭头函数" }
+      ]
+    },
+    {
+      "title": "生成器与 yield",
+      "purpose": "记录 generator 函数声明、yield/yield* 表达式与迭代协议",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "function* 语法，yield 委托 (yield*)" }
+      ]
+    },
+    {
+      "title": "数组与对象",
+      "purpose": "详解数组/对象字面量、索引、计算属性与展开运算符",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "支持计算属性 [expr]、展开运算符 ...、嵌套解构" }
+      ]
+    },
+    {
+      "title": "字符串插值",
+      "purpose": "解释 ${expression} 语法以及字符串字面量中支持的表达式类型",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "支持任意表达式内嵌" }
+      ]
+    },
+    {
+      "title": "解构赋值",
+      "purpose": "记录数组解构、对象解构、嵌套解构、默认值与剩余元素",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "let [a, b, ...rest] = arr; let {x, y = 10} = obj;" }
+      ]
+    },
+    {
+      "title": "模式匹配与 match",
+      "purpose": "详解 match 语句、字面量模式、通配符模式、守卫条件",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "match(expr) { pattern when guard => body; _ => default; }" }
+      ]
+    },
+    {
+      "title": "类与面向对象",
+      "purpose": "覆盖类定义、构造器、方法、多继承、extends、访问修饰符、静态方法、getter/setter",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "public/private/protected、static、get/set、super 调用、多继承 supers 向量" }
+      ]
+    },
+    {
+      "title": "运算符重载",
+      "purpose": "记录魔术方法 __add__/__sub__/__mul__ 等实现自定义运算符行为",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "16 种魔术方法：__add__~__shr__、__eq__、__lt__、__gt__ 等" }
+      ]
+    },
+    {
+      "title": "装饰器",
+      "purpose": "解释 @decorator 语法、装饰器作用于函数/类的机制",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "当前仅支持函数和类目标，无 @Target 元数据限制，无装饰器元数据存储" }
+      ]
+    },
+    {
+      "title": "接口与动态分派",
+      "purpose": "记录接口声明、结构化类型以及 =~= 接口匹配运算符",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "=~= 运算符检查对象是否实现接口的所有方法" }
+      ]
+    },
+    {
+      "title": "异步编程",
+      "purpose": "解释 async/await、Promise、then/catch、go 语句与事件循环交互",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "go 语句启动异步任务，for-await-of 迭代异步可迭代对象" }
+      ]
+    },
+    {
+      "title": "错误处理",
+      "purpose": "记录 throw 语句、try/catch/finally 块、守卫条件与异常传播",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "支持 catch e if condition 守卫语法与 finally 块" }
+      ]
+    },
+    {
+      "title": "Proxy 与 Handler",
+      "purpose": "详解 Proxy 对象、get/set 陷阱与元编程能力",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "JavaScript 风格 Proxy(target, handler)，handler 定义 get/set 拦截" }
+      ]
+    },
+    {
+      "title": "管道运算符",
+      "purpose": "记录 |> 管道运算符语法与函数组合用法",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "value |> fn 等价于 fn(value)，支持链式管道" }
+      ]
+    },
+    {
+      "title": "空值处理",
+      "purpose": "说明 ?? 空值合并运算符与 ?. 可选链运算符",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "a ?? b 当 a 为 null 时返回 b；obj?.prop 安全属性访问" }
+      ]
+    },
+    {
+      "title": "Import 系统",
+      "purpose": "全面记录所有 import 语法形式、包加载机制与文件导入",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "10 种 import 形式：通配符、单符号、多符号、包对象、文件、别名、from、混合导入等" }
+      ]
+    },
+    {
+      "title": "类型注解",
+      "purpose": "记录变量声明和函数参数的可选类型注解语法",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "let x: number = 1; function foo(a: string): boolean {} — 运行时不强制" }
+      ]
+    },
+    {
+      "title": "反射与内省",
+      "purpose": "记录 typeof、getMethods、getFields、getGetters、getSetters、getStaticMethods、declaredType、runtimeType 等反射 API",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "基础反射能力，无元数据类型，无装饰器元数据存储" }
+      ]
+    },
+    {
+      "title": "位运算与优先级",
+      "purpose": "详解按位运算符、64 位补码行为与当前运算优先级",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "覆盖 ~、&、|、^、<<、>>，以及与相等/接口匹配的优先级关系" }
+      ]
+    },
+    {
+      "title": "注释与语法约定",
+      "purpose": "列出支持的注释风格（C++/C/Python）与语法约定（如可选分号）",
+      "parent": "语言参考",
+      "page_notes": [
+        { "content": "// 单行、/* */ 多行、# 单行，分号可选" }
+      ]
+    },
+    {
+      "title": "标准库",
+      "purpose": "全面记录内置函数、方法与标准包（21 个内置包 + 4 个第三方包）",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "内置函数",
+      "purpose": "记录全局函数如 print、println、len、sleep、eval、keys、values、typeof 等",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "注册在 AsulInterpreter.cpp registerExternalPackages()" }
+      ]
+    },
+    {
+      "title": "数组方法",
+      "purpose": "详述数组方法：map、filter、reduce、find、some、every、includes、sort、reverse、indexOf、slice、splice、concat、flat、fill、shift、unshift 等",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "支持回调函数参数 (elem, index, array)" }
+      ]
+    },
+    {
+      "title": "字符串方法",
+      "purpose": "记录字符串方法：split、substring、replace、trim、toLowerCase、toUpperCase、indexOf、startsWith、endsWith、includes、repeat、padStart、padEnd、charAt、charCodeAt 等",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "Number 方法",
+      "purpose": "记录 Number 对象的静态方法与实例方法：parseInt、parseFloat、isNaN、isFinite、toFixed 等",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "Object 方法",
+      "purpose": "记录 Object 的工具方法：keys、values、entries、assign、hasOwnProperty 等",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "容器类",
+      "purpose": "说明 Map、Set、Stack、Deque、PriorityQueue 的构造与方法",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "std.collections 包提供" }
+      ]
+    },
+    {
+      "title": "std.builtin 包",
+      "purpose": "记录 std.builtin 包中的内置基础函数与全局工具",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.math 包",
+      "purpose": "记录 std.math 包中的数学常量（pi、e）与函数（abs、sqrt、sin、cos、pow、floor、ceil、round、random 等）",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.string 包",
+      "purpose": "记录 std.string 包中的字符串工具函数",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.io 与文件系统",
+      "purpose": "记录文件 I/O、FileStream、File/Dir 类以及 std.path 工具",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "File/Dir 类、FileStream、read/write/open/close" }
+      ]
+    },
+    {
+      "title": "std.io.fileSystem 扩展",
+      "purpose": "系统化记录 File、Dir、FileStream 以及 mkdir/rmdir/stat/copy/move/chmod/walk 等 API",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "与 ALang_Technical_Reference.md 的 4.x 文件系统扩展保持一致" }
+      ]
+    },
+    {
+      "title": "std.path 包",
+      "purpose": "记录路径操作工具：join、resolve、dirname、basename、extname、normalize",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.time 与日期/时间",
+      "purpose": "解释 Date 对象、时间格式化/解析、Duration 与时区支持",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "Date 类、Duration 类、format/parse 方法" }
+      ]
+    },
+    {
+      "title": "std.network 包",
+      "purpose": "记录 HTTP 客户端（get/post/put/delete）、Socket API、URL 解析与服务端功能",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.os 包",
+      "purpose": "记录 os.system、getenv、setenv、exit、platform、arch、getPid、getcwd 等系统调用",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "兼容别名 os 映射为 std.os" }
+      ]
+    },
+    {
+      "title": "std.process 包",
+      "purpose": "记录进程管理：exec、spawn、管道、环境变量操作",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.crypto 包",
+      "purpose": "记录加密功能：md5、sha1、sha256、sha512、hmac、base64 编解码（可选 OpenSSL）",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "未链接 OpenSSL 时加密函数抛异常" }
+      ]
+    },
+    {
+      "title": "std.ffi 包",
+      "purpose": "记录 FFI 功能：dlopen/LoadLibrary 动态库加载、函数调用桥接",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "跨平台：Unix dlopen、Windows LoadLibrary" }
+      ]
+    },
+    {
+      "title": "std.collections 包",
+      "purpose": "记录容器类包：Map、Set、Stack、Deque、PriorityQueue 的构造与方法",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.array 包",
+      "purpose": "记录 std.array 包中的数组扩展工具函数",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.regex 包",
+      "purpose": "记录正则表达式支持：match、test、replace、split",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.encoding 包",
+      "purpose": "记录编码功能：base64、hex、url 编解码",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "std.test 包",
+      "purpose": "记录测试框架：assert、assertEqual、assertThrows 等脚本内断言",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "用于 funcTest.sh / errorTest.sh 测试套件" }
+      ]
+    },
+    {
+      "title": "std.log 包",
+      "purpose": "记录日志功能：日志级别、格式化输出",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "JSON 包",
+      "purpose": "记录 json.stringify/json.parse 的行为、支持类型、错误处理与示例",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "引用 Example/jsonExample.alang" }
+      ]
+    },
+    {
+      "title": "XML 包",
+      "purpose": "记录 XML 解析与生成功能",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "YAML 包",
+      "purpose": "记录 YAML 解析与生成功能",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "CSV 包",
+      "purpose": "记录 CSV 解析与生成功能",
+      "parent": "标准库",
+      "page_notes": [
+        { "content": "" }
+      ]
+    },
+    {
+      "title": "测试基础设施",
+      "purpose": "说明 funcTest.sh / errorTest.sh 测试框架、test_runner 与测试组织方式",
+      "page_notes": [
+        { "content": "基于 .alang 脚本的测试，无 C++ 测试框架" }
       ]
     }
   ]
