@@ -719,16 +719,26 @@ private:
             exitScope();
         } else if (auto s = std::dynamic_pointer_cast<asul::ImportStmt>(stmt)) {
             for (const auto& e : s->entries) {
-                std::string name = e.alias.has_value() ? *e.alias : e.symbol;
-                if (name == "*") {
-                    // Handle wildcard import
+                if (e.kind == asul::ImportStmt::ImportKind::Wildcard) {
+                    // Wildcard import: import all exported symbols from package
                     if (packageExports.count(e.packageName)) {
                         for (const auto& exportedSym : packageExports[e.packageName]) {
                             defineSymbol(exportedSym, toRange(e.line, e.column, e.length), "import");
                         }
                     }
+                } else if (e.kind == asul::ImportStmt::ImportKind::Module) {
+                    // Shorthand module import: import json; -> binds package as variable
+                    std::string varName = e.alias.has_value() ? *e.alias : e.packageName;
+                    // For "std.math" -> "math", for "json" -> "json"
+                    size_t dotPos = varName.rfind('.');
+                    if (dotPos != std::string::npos) varName = varName.substr(dotPos + 1);
+                    defineSymbol(varName, toRange(e.line, e.column, e.length), "import");
                 } else {
-                    defineSymbol(name, toRange(e.line, e.column, e.length), "import");
+                    // Symbol import: import std.math.pi; or import std.math.(pi, abs);
+                    std::string name = e.alias.has_value() ? *e.alias : e.symbol;
+                    if (!name.empty()) {
+                        defineSymbol(name, toRange(e.line, e.column, e.length), "import");
+                    }
                 }
             }
         } else if (auto s = std::dynamic_pointer_cast<asul::ClassStmt>(stmt)) {
@@ -749,6 +759,45 @@ private:
                 exitScope();
             }
             if (s->finallyBlock) visitStmt(s->finallyBlock);
+        } else if (auto s = std::dynamic_pointer_cast<asul::ForOfStmt>(stmt)) {
+            enterScope();
+            visitExpr(s->iterable);
+            defineSymbol(s->varName, {{0,0},{0,0}}, "var");
+            visitStmt(s->body);
+            exitScope();
+        } else if (auto s = std::dynamic_pointer_cast<asul::ForAwaitOfStmt>(stmt)) {
+            enterScope();
+            visitExpr(s->iterable);
+            defineSymbol(s->varName, {{0,0},{0,0}}, "var");
+            visitStmt(s->body);
+            exitScope();
+        } else if (auto s = std::dynamic_pointer_cast<asul::SwitchStmt>(stmt)) {
+            visitExpr(s->expr);
+            for (const auto& c : s->cases) {
+                if (c.value) visitExpr(c.value);
+                for (const auto& bodyStmt : c.body) visitStmt(bodyStmt);
+            }
+        } else if (auto s = std::dynamic_pointer_cast<asul::GoStmt>(stmt)) {
+            if (s->call) visitExpr(s->call);
+        } else if (auto s = std::dynamic_pointer_cast<asul::ThrowStmt>(stmt)) {
+            if (s->value) visitExpr(s->value);
+        } else if (auto s = std::dynamic_pointer_cast<asul::MatchStmt>(stmt)) {
+            visitExpr(s->expr);
+            for (const auto& arm : s->arms) {
+                if (arm.pattern) visitExpr(arm.pattern);
+                if (arm.guard) visitExpr(arm.guard);
+                if (arm.body) visitStmt(arm.body);
+            }
+        } else if (auto s = std::dynamic_pointer_cast<asul::DecoratorStmt>(stmt)) {
+            for (const auto& dec : s->decorators) visitExpr(dec);
+            if (s->target) visitStmt(s->target);
+        } else if (auto s = std::dynamic_pointer_cast<asul::VarDeclDestructuring>(stmt)) {
+            if (s->init) visitExpr(s->init);
+        } else if (auto s = std::dynamic_pointer_cast<asul::ExtendStmt>(stmt)) {
+            for (const auto& m : s->methods) visitStmt(m);
+        } else if (auto s = std::dynamic_pointer_cast<asul::InterfaceStmt>(stmt)) {
+            // Interface declarations are already tracked by defineSymbol if needed
+            // No body to traverse
         }
     }
 
@@ -828,6 +877,60 @@ private:
                  Range r = toRange(e->line, 1, e->name.length());
                  data.diagnostics.push_back(makeDiagnostic(r, 1, "未定义的变量: " + e->name));
             }
+        } else if (auto e = std::dynamic_pointer_cast<asul::LogicalExpr>(expr)) {
+            visitExpr(e->left);
+            visitExpr(e->right);
+        } else if (auto e = std::dynamic_pointer_cast<asul::UnaryExpr>(expr)) {
+            visitExpr(e->right);
+        } else if (auto e = std::dynamic_pointer_cast<asul::UpdateExpr>(expr)) {
+            visitExpr(e->operand);
+        } else if (auto e = std::dynamic_pointer_cast<asul::ConditionalExpr>(expr)) {
+            visitExpr(e->condition);
+            visitExpr(e->thenBranch);
+            visitExpr(e->elseBranch);
+        } else if (auto e = std::dynamic_pointer_cast<asul::NewExpr>(expr)) {
+            visitExpr(e->callee);
+            for (const auto& arg : e->args) visitExpr(arg);
+        } else if (auto e = std::dynamic_pointer_cast<asul::IndexExpr>(expr)) {
+            visitExpr(e->object);
+            visitExpr(e->index);
+        } else if (auto e = std::dynamic_pointer_cast<asul::SetPropExpr>(expr)) {
+            visitExpr(e->object);
+            visitExpr(e->value);
+        } else if (auto e = std::dynamic_pointer_cast<asul::SetIndexExpr>(expr)) {
+            visitExpr(e->object);
+            visitExpr(e->index);
+            visitExpr(e->value);
+        } else if (auto e = std::dynamic_pointer_cast<asul::ArrayLiteralExpr>(expr)) {
+            for (const auto& el : e->elements) visitExpr(el);
+        } else if (auto e = std::dynamic_pointer_cast<asul::ObjectLiteralExpr>(expr)) {
+            for (const auto& p : e->props) {
+                if (p.keyExpr) visitExpr(p.keyExpr);
+                visitExpr(p.value);
+            }
+        } else if (auto e = std::dynamic_pointer_cast<asul::SpreadExpr>(expr)) {
+            visitExpr(e->expr);
+        } else if (auto e = std::dynamic_pointer_cast<asul::AwaitExpr>(expr)) {
+            visitExpr(e->expr);
+        } else if (auto e = std::dynamic_pointer_cast<asul::OptionalChainingExpr>(expr)) {
+            visitExpr(e->object);
+        } else if (auto e = std::dynamic_pointer_cast<asul::YieldExpr>(expr)) {
+            if (e->value) visitExpr(e->value);
+        } else if (auto e = std::dynamic_pointer_cast<asul::SuperExpr>(expr)) {
+            // super.method -- no sub-expressions to visit
+        } else if (auto e = std::dynamic_pointer_cast<asul::PipeExpr>(expr)) {
+            visitExpr(e->left);
+            visitExpr(e->right);
+        } else if (auto e = std::dynamic_pointer_cast<asul::FunctionExpr>(expr)) {
+            enterScope();
+            for (const auto& p : e->params) {
+                defineSymbol(p.name, {{0,0},{0,0}}, "param");
+                if (p.defaultValue) visitExpr(p.defaultValue);
+            }
+            visitStmt(e->body);
+            exitScope();
+        } else if (auto e = std::dynamic_pointer_cast<asul::DestructuringAssignExpr>(expr)) {
+            visitExpr(e->value);
         }
     }
 };
@@ -897,7 +1000,11 @@ namespace alang_lsp {
 }
 
 int main() {
+#ifdef _WIN32
+    alang_lsp::logFile.open(std::string(std::getenv("TEMP") ? std::getenv("TEMP") : "C:\\Temp") + "\\alang-lsp.log", std::ios::out | std::ios::app);
+#else
     alang_lsp::logFile.open("/tmp/alang-lsp.log", std::ios::out | std::ios::app);
+#endif
     alang_lsp::log("alang-lsp starting...");
 	using namespace alang_lsp;
 	std::map<std::string, std::string> docs;
