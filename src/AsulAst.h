@@ -135,6 +135,7 @@ struct TryCatchStmt : Stmt {
 };
 struct EmptyStmt : Stmt {};
 struct ImportStmt : Stmt {
+	enum class ImportKind { Symbol, Wildcard, Module };
 	struct Entry {
 		// Package import (existing behavior): symbol == "*" means wildcard
 		std::string packageName;
@@ -143,6 +144,7 @@ struct ImportStmt : Stmt {
 		bool isFile{false};
 		std::string filePath; // may be relative or absolute; .alang suffix may be omitted
 		std::optional<std::string> alias;
+		ImportKind kind{ImportKind::Symbol};
 		int line{0};
 		int column{1};
 		int length{1};

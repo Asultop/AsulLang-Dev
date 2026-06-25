@@ -342,7 +342,7 @@ StmtPtr Parser::importDeclaration(bool isFrom) {
 		auto pkgName = joinIdentifiers(pathParts, 0, pathParts.size());
 		if (match({TokenType::Star})) {
 			Token starTok = previous();
-			ImportStmt::Entry e; e.packageName = pkgName; e.symbol = std::string("*"); e.isFile = false; e.line = starTok.line; e.column = starTok.column; e.length = std::max(1, starTok.length); imp->entries.push_back(e);
+			ImportStmt::Entry e; e.packageName = pkgName; e.symbol = std::string("*"); e.isFile = false; e.kind = ImportStmt::ImportKind::Wildcard; e.line = starTok.line; e.column = starTok.column; e.length = std::max(1, starTok.length); imp->entries.push_back(e);
 			consume(TokenType::Semicolon, "导入语句后缺少 ';'");
 			return imp;
 		}
@@ -376,8 +376,8 @@ StmtPtr Parser::importDeclaration(bool isFrom) {
 		// Do NOT implicitly place packages under `std.`; keep top-level packages independent.
 		auto tok = pathParts.back();
 		std::string shorthandPkg = tok.lexeme;
-		// Use special symbol marker to indicate binding the package object itself
-		ImportStmt::Entry e; e.packageName = shorthandPkg; e.symbol = std::string("__module__"); e.isFile = false; e.line = tok.line; e.column = tok.column; e.length = tok.length;
+		// Use ImportKind::Module to indicate binding the package object itself
+		ImportStmt::Entry e; e.packageName = shorthandPkg; e.symbol = std::string(); e.isFile = false; e.kind = ImportStmt::ImportKind::Module; e.line = tok.line; e.column = tok.column; e.length = tok.length;
 		if (match({TokenType::As})) {
 			e.alias = consume(TokenType::Identifier, "缺少别名").lexeme;
 		}
