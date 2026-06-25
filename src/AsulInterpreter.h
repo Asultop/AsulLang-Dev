@@ -163,6 +163,20 @@ public:
 			}
 			std::string key = finalPath.string();
 			ctxFile = key;
+			// Check for circular imports
+			for (const auto& s : importStack) {
+				if (s == key) {
+					std::ostringstream oss;
+					oss << "Circular import detected: " << key;
+					oss << " | import chain: ";
+					for (size_t i = 0; i < importStack.size(); ++i) {
+						if (i) oss << " -> ";
+						oss << importStack[i];
+					}
+					oss << " -> " << key;
+					throw std::runtime_error(oss.str());
+				}
+			}
 			if (importedModules.find(key) != importedModules.end()) return importedModules[key];
 
 			// Read file content
@@ -184,6 +198,13 @@ public:
 
 			// Execute in an isolated environment that can see globals (builtins/classes)
 			auto fileEnv = std::make_shared<Environment>(globals);
+			// Update importBaseDir to the directory of the imported file so nested relative paths resolve correctly
+			struct BaseDirGuard {
+				std::filesystem::path& dir;
+				std::filesystem::path prev;
+				BaseDirGuard(std::filesystem::path& d, std::filesystem::path p) : dir(d), prev(d) { dir = p; }
+				~BaseDirGuard() { dir = prev; }
+			} baseDirGuard{importBaseDir, finalPath.parent_path()};
 			// Run
 			executeBlock(stmts, fileEnv);
 
@@ -540,319 +561,78 @@ public:
 						if (auto rs = std::get_if<std::string>(&r)) return Value{toString(l) + *rs};
 					}
 					if (auto ls = std::get_if<std::string>(&l)) return Value{*ls + toString(r)};
-					// Operator overloading: __add__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__add__");
-							if (m) {
-								std::vector<Value> args{r};
-								// For builtin methods of instances, 'this' is usually bound when method is retrieved via getProperty.
-								// But here we retrieved it from class. We need to bind 'this'.
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								// User defined
-								if (args.size() != m->params.size()) { /* handle mismatch? */ }
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+					{ auto ov = tryOverload(l, r, "__add__"); if (!std::holds_alternative<std::monostate>(ov)) return ov; }
 					throw std::runtime_error("'+' requires numbers or strings");
-				case TokenType::Minus:
-					// Operator overloading: __sub__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__sub__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				case TokenType::Minus: {
+					auto ov = tryOverload(l, r, "__sub__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{getNumber(l, "left of '-' ") - getNumber(r, "right of '-' ")};
-				case TokenType::Star:
-					// Operator overloading: __mul__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__mul__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				}
+				case TokenType::Star: {
+					auto ov = tryOverload(l, r, "__mul__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{getNumber(l, "left of '*' ") * getNumber(r, "right of '*' ")};
-				case TokenType::Slash:
-					// Operator overloading: __div__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__div__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
-					{
-						double denom = getNumber(r, "right of '/' ");
-						return Value{getNumber(l, "left of '/' ") / denom};
-					}
-				case TokenType::Percent:
-					// Operator overloading: __mod__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__mod__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
-					{
-						double rv = getNumber(r, "right of '%' ");
-						return Value{std::fmod(getNumber(l, "left of '%' "), rv)};
-					}
-				case TokenType::Greater:
-					// Operator overloading: __gt__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__gt__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				}
+				case TokenType::Slash: {
+					auto ov = tryOverload(l, r, "__div__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
+					double denom = getNumber(r, "right of '/' ");
+					return Value{getNumber(l, "left of '/' ") / denom};
+				}
+				case TokenType::Percent: {
+					auto ov = tryOverload(l, r, "__mod__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
+					double rv = getNumber(r, "right of '%' ");
+					return Value{std::fmod(getNumber(l, "left of '%' "), rv)};
+				}
+				case TokenType::Greater: {
+					auto ov = tryOverload(l, r, "__gt__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{getNumber(l, ">") > getNumber(r, ">")};
-				case TokenType::GreaterEqual:
-					// Operator overloading: __ge__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__ge__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				}
+				case TokenType::GreaterEqual: {
+					auto ov = tryOverload(l, r, "__ge__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{getNumber(l, ">=") >= getNumber(r, ">=")};
-				case TokenType::Less:
-					// Operator overloading: __lt__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__lt__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				}
+				case TokenType::Less: {
+					auto ov = tryOverload(l, r, "__lt__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{getNumber(l, "<") < getNumber(r, "<")};
-				case TokenType::LessEqual:
-					// Operator overloading: __le__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__le__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				}
+				case TokenType::LessEqual: {
+					auto ov = tryOverload(l, r, "__le__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{getNumber(l, "<=") <= getNumber(r, "<=")};
-				case TokenType::EqualEqual:
-					// Operator overloading: __eq__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__eq__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				}
+				case TokenType::EqualEqual: {
+					auto ov = tryOverload(l, r, "__eq__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{isJSEqual(l, r)};
-				case TokenType::BangEqual:
-					// Operator overloading: __ne__ (or use negation of __eq__)
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__ne__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+				}
+				case TokenType::BangEqual: {
+					auto ov = tryOverload(l, r, "__ne__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					return Value{!isJSEqual(l, r)};
+				}
 				case TokenType::StrictEqual: return Value{isStrictEqual(l, r)};
 				case TokenType::StrictNotEqual: return Value{!isStrictEqual(l, r)};
-				case TokenType::Ampersand:
-					// Operator overloading: __and__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__and__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
-					{
-						long long lv = static_cast<long long>(getNumber(l, "& left"));
-						long long rv = static_cast<long long>(getNumber(r, "& right"));
-						return Value{ static_cast<double>(lv & rv) };
-					}
-				case TokenType::Pipe:
-					// Operator overloading: __or__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__or__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
-					{
-						long long lv = static_cast<long long>(getNumber(l, "| left"));
-						long long rv = static_cast<long long>(getNumber(r, "| right"));
-						return Value{ static_cast<double>(lv | rv) };
-					}
-				case TokenType::Caret:
-					// Operator overloading: __xor__
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__xor__");
-							if (m) {
-								std::vector<Value> args{r};
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size();++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
-					{
-						long long lv = static_cast<long long>(getNumber(l, "^ left"));
-						long long rv = static_cast<long long>(getNumber(r, "^ right"));
-						return Value{ static_cast<double>(lv ^ rv) };
-					}
+				case TokenType::Ampersand: {
+					auto ov = tryOverload(l, r, "__and__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
+					long long lv = static_cast<long long>(getNumber(l, "& left"));
+					long long rv = static_cast<long long>(getNumber(r, "& right"));
+					return Value{ static_cast<double>(lv & rv) };
+				}
+				case TokenType::Pipe: {
+					auto ov = tryOverload(l, r, "__or__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
+					long long lv = static_cast<long long>(getNumber(l, "| left"));
+					long long rv = static_cast<long long>(getNumber(r, "| right"));
+					return Value{ static_cast<double>(lv | rv) };
+				}
+				case TokenType::Caret: {
+					auto ov = tryOverload(l, r, "__xor__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
+					long long lv = static_cast<long long>(getNumber(l, "^ left"));
+					long long rv = static_cast<long long>(getNumber(r, "^ right"));
+					return Value{ static_cast<double>(lv ^ rv) };
+				}
 				case TokenType::ShiftLeft: {
-					// Operator overloading: __shl__ (for stream-like operations)
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__shl__");
-							if (m) {
-								std::vector<Value> args{ r };
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size(); ++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+					auto ov = tryOverload(l, r, "__shl__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					long long lv = static_cast<long long>(getNumber(l, "<< left"));
 					long long rv = static_cast<long long>(getNumber(r, "<< right"));
 					return Value{ static_cast<double>(lv << rv) };
 				}
 				case TokenType::ShiftRight: {
-					// Operator overloading: __shr__ (for stream-like operations)
-					if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
-						if (*lInst && (*lInst)->klass) {
-							auto m = findMethod((*lInst)->klass, "__shr__");
-							if (m) {
-								std::vector<Value> args{ r };
-								auto boundEnv = std::make_shared<Environment>(m->closure);
-								boundEnv->define("this", l);
-								if (m->isBuiltin) return m->builtin(args, boundEnv);
-								auto local = std::make_shared<Environment>(boundEnv);
-								for (size_t i=0;i<args.size() && i<m->params.size(); ++i) local->define(m->params[i], args[i]);
-								try { executeBlock(m->body, local); } catch (const ReturnSignal& rs) { return rs.value; }
-								return Value{std::monostate{}};
-							}
-						}
-					}
+					auto ov = tryOverload(l, r, "__shr__"); if (!std::holds_alternative<std::monostate>(ov)) return ov;
 					long long lv = static_cast<long long>(getNumber(l, ">> left"));
 					long long rv = static_cast<long long>(getNumber(r, ">> right"));
 					return Value{ static_cast<double>(lv >> rv) };
@@ -1300,6 +1080,7 @@ public:
 							auto fit = modObj->find(ent.symbol);
 							if (fit == modObj->end()) {
 								std::ostringstream oss; oss << "Module '" << ent.filePath << "' has no symbol '" << ent.symbol << "'";
+								oss << ". If the symbol exists in the module, make sure it is exported (use 'export' keyword or start the name with an uppercase letter)";
 								oss << " at line " << ent.line << ", column " << ent.column << ", length " << std::max(1, ent.length);
 								throw std::runtime_error(oss.str());
 							}
@@ -1336,14 +1117,14 @@ public:
 				}
 				auto pobj = it->second;
 				if (!pobj) continue;
-				if (ent.symbol == "__module__") {
+				if (ent.kind == ImportStmt::ImportKind::Module) {
 					// Bind the package object itself to a variable named by the last segment
 					std::string pkg = ent.packageName;
 					size_t p = pkg.rfind('.');
 					std::string varName = (p == std::string::npos) ? pkg : pkg.substr(p+1);
 					if (ent.alias.has_value()) varName = ent.alias.value();
 					env->define(varName, Value{pobj});
-				} else if (ent.symbol == "*") {
+				} else if (ent.kind == ImportStmt::ImportKind::Wildcard) {
 					// Load all lazy sub-packages
 					std::string prefix = ent.packageName + ".";
 					std::vector<std::string> toLoad;
@@ -1445,165 +1226,15 @@ public:
 			return;
 		}
 		if (auto fe = std::dynamic_pointer_cast<ForEachStmt>(stmt)) {
-			// foreach (varName in iterable) body
-			Value iterableValue = evaluate(fe->iterable);
-			
-			// 创建新的作用域用于循环变量
-			auto loopEnv = std::make_shared<Environment>(env);
-			loopEnv->define(fe->varName, Value{std::monostate{}});
-			
-			// 根据 iterable 类型进行迭代
-			if (auto arr = std::get_if<std::shared_ptr<std::vector<Value>>>(&iterableValue)) {
-				// 数组：遍历每个元素
-				for (const auto& elem : **arr) {
-					loopEnv->assign(fe->varName, elem);
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fe->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else if (auto obj = std::get_if<std::shared_ptr<std::unordered_map<std::string,Value>>>(&iterableValue)) {
-				// 对象：遍历每个键
-				for (const auto& [key, value] : **obj) {
-					loopEnv->assign(fe->varName, Value{key});
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fe->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else if (auto str = std::get_if<std::string>(&iterableValue)) {
-				// 字符串：遍历每个字符
-				for (char ch : *str) {
-					loopEnv->assign(fe->varName, Value{std::string(1, ch)});
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fe->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else {
-				throw std::runtime_error("foreach requires an iterable (array, object, or string)");
-			}
+			iterateIterable(evaluate(fe->iterable), fe->varName, fe->body);
 			return;
 		}
 		if (auto fo = std::dynamic_pointer_cast<ForOfStmt>(stmt)) {
-			// for (varName of iterable) body
-			Value iterableValue = evaluate(fo->iterable);
-
-			// 创建新的作用域用于循环变量
-			auto loopEnv = std::make_shared<Environment>(env);
-			loopEnv->define(fo->varName, Value{std::monostate{}});
-
-			// 根据 iterable 类型进行迭代 (与 ForEachStmt 相同)
-			if (auto arr = std::get_if<std::shared_ptr<std::vector<Value>>>(&iterableValue)) {
-				// 数组：遍历每个元素
-				for (const auto& elem : **arr) {
-					loopEnv->assign(fo->varName, elem);
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fo->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else if (auto obj = std::get_if<std::shared_ptr<std::unordered_map<std::string,Value>>>(&iterableValue)) {
-				// 对象：遍历每个键
-				for (const auto& [key, value] : **obj) {
-					loopEnv->assign(fo->varName, Value{key});
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fo->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else if (auto str = std::get_if<std::string>(&iterableValue)) {
-				// 字符串：遍历每个字符
-				for (char ch : *str) {
-					loopEnv->assign(fo->varName, Value{std::string(1, ch)});
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fo->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else {
-				throw std::runtime_error("for-of requires an iterable (array, object, or string)");
-			}
+			iterateIterable(evaluate(fo->iterable), fo->varName, fo->body);
 			return;
 		}
 		if (auto fao = std::dynamic_pointer_cast<ForAwaitOfStmt>(stmt)) {
-			// for await (varName of iterable) body
-			Value iterableValue = evaluate(fao->iterable);
-
-			// 创建新的作用域用于循环变量
-			auto loopEnv = std::make_shared<Environment>(env);
-			loopEnv->define(fao->varName, Value{std::monostate{}});
-
-			// 根据 iterable 类型进行迭代
-			if (auto arr = std::get_if<std::shared_ptr<std::vector<Value>>>(&iterableValue)) {
-				// 数组：遍历每个元素，对每个元素 await
-				for (const auto& elem : **arr) {
-					// await the element if it's a promise
-					Value awaitedElem = evaluateAwait(elem);
-					loopEnv->assign(fao->varName, awaitedElem);
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fao->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else if (auto obj = std::get_if<std::shared_ptr<std::unordered_map<std::string,Value>>>(&iterableValue)) {
-				// 对象：遍历每个键
-				for (const auto& [key, value] : **obj) {
-					Value awaitedValue = evaluateAwait(value);
-					loopEnv->assign(fao->varName, Value{key});
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fao->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else if (auto str = std::get_if<std::string>(&iterableValue)) {
-				// 字符串：遍历每个字符
-				for (char ch : *str) {
-					loopEnv->assign(fao->varName, Value{std::string(1, ch)});
-					try {
-						auto prevEnv = env;
-						env = loopEnv;
-						execute(fao->body);
-						env = prevEnv;
-					}
-					catch (const ContinueSignal&) { /* continue to next iteration */ }
-					catch (const BreakSignal&) { break; }
-				}
-			} else {
-				throw std::runtime_error("for-await-of requires an iterable (array, object, or string)");
-			}
+			iterateIterable(evaluate(fao->iterable), fao->varName, fao->body, true);
 			return;
 		}
 		if (auto sw = std::dynamic_pointer_cast<SwitchStmt>(stmt)) {
@@ -2005,7 +1636,7 @@ public:
 		}
 		if (args.size() != fn->params.size()) throw std::runtime_error("callFunction: arity mismatch");
 		auto local = std::make_shared<Environment>(fn->closure);
-		for (size_t i=0;i<args.size();++i) local->define(fn->params[i], args[i]);
+		bindFunctionArgs(fn, args, local);
 		try {
 			executeBlock(fn->body, local);
 		} catch (const ReturnSignal& rs) {
@@ -2027,6 +1658,22 @@ public:
 		return p->result;
 	}
 
+	// 绑定函数参数到局部环境
+	void bindFunctionArgs(std::shared_ptr<Function> fn, const std::vector<Value>& args, std::shared_ptr<Environment> local) {
+		size_t i = 0;
+		for (; i < args.size() && i < fn->params.size(); ++i) {
+			local->define(fn->params[i], args[i]);
+		}
+		// Fill missing params with defaults
+		for (; i < fn->params.size(); ++i) {
+			if (fn->defaultValues[i]) {
+				local->define(fn->params[i], evaluate(fn->defaultValues[i]));
+			} else {
+				local->define(fn->params[i], Value{std::monostate{}});
+			}
+		}
+	}
+
 	// Overload: call a Function object directly with args
 	Value callFunction(std::shared_ptr<Function> fn, const std::vector<Value>& args) {
 		if (fn->isBuiltin) {
@@ -2036,17 +1683,7 @@ public:
 			std::ostringstream oss; oss << "callFunction: expected at least " << (fn->params.size() - (fn->restParamIndex >= 0 ? 1 : 0)) << " arguments but got " << args.size(); throw std::runtime_error(oss.str());
 		}
 		auto local = std::make_shared<Environment>(fn->closure);
-		size_t i = 0;
-		for (; i < args.size() && i < fn->params.size(); ++i) {
-			local->define(fn->params[i], args[i]);
-		}
-		for (; i < fn->params.size(); ++i) {
-			if (fn->defaultValues[i]) {
-				local->define(fn->params[i], evaluate(fn->defaultValues[i]));
-			} else {
-				local->define(fn->params[i], Value{std::monostate{}});
-			}
-		}
+		bindFunctionArgs(fn, args, local);
 		try {
 			executeBlock(fn->body, local);
 		} catch (const ReturnSignal& rs) { return rs.value; }
@@ -2075,6 +1712,85 @@ private:
 
 	// Lazy loading support
 	std::map<std::string, std::function<void(std::shared_ptr<Object>)>> lazyPackages;
+
+	// Operator overloading helper: tries magic method, returns monostate if not found
+	Value tryOverload(const Value& l, const Value& r, const char* magicName) {
+		if (auto lInst = std::get_if<std::shared_ptr<Instance>>(&l)) {
+			if (*lInst && (*lInst)->klass) {
+				auto m = findMethod((*lInst)->klass, magicName);
+				if (m) {
+					std::vector<Value> args{r};
+					auto boundEnv = std::make_shared<Environment>(m->closure);
+					boundEnv->define("this", l);
+					if (m->isBuiltin) return m->builtin(args, boundEnv);
+					auto local = std::make_shared<Environment>(boundEnv);
+					for (size_t i = 0; i < args.size() && i < m->params.size(); ++i)
+						local->define(m->params[i], args[i]);
+					try { executeBlock(m->body, local); }
+					catch (const ReturnSignal& rs) { return rs.value; }
+					return Value{std::monostate{}};
+				}
+			}
+		}
+		return Value{std::monostate{}};
+	}
+
+	// Generic iterator: iterate array/object/string, execute body for each element
+	void iterateIterable(const Value& iterableValue, const std::string& varName,
+						 const StmtPtr& body, bool awaitEach = false) {
+		auto loopEnv = std::make_shared<Environment>(env);
+		loopEnv->define(varName, Value{std::monostate{}});
+
+		auto runBody = [&](const Value& elem) {
+			loopEnv->assign(varName, elem);
+			try {
+				auto prevEnv = env;
+				env = loopEnv;
+				execute(body);
+				env = prevEnv;
+			}
+			catch (const ContinueSignal&) {}
+			catch (const BreakSignal&) { throw; }
+		};
+
+		if (auto arr = std::get_if<std::shared_ptr<Array>>(&iterableValue)) {
+			for (const auto& elem : **arr) {
+				Value val = awaitEach ? evaluateAwait(elem) : elem;
+				try { runBody(val); }
+				catch (const BreakSignal&) { break; }
+			}
+		} else if (auto obj = std::get_if<std::shared_ptr<Object>>(&iterableValue)) {
+			for (const auto& [key, value] : **obj) {
+				Value elem = Value{key};
+				try { runBody(elem); }
+				catch (const BreakSignal&) { break; }
+			}
+		} else if (auto str = std::get_if<std::string>(&iterableValue)) {
+			for (char ch : *str) {
+				Value elem = Value{std::string(1, ch)};
+				try { runBody(elem); }
+				catch (const BreakSignal&) { break; }
+			}
+		} else {
+			throw std::runtime_error("foreach/for-of requires an iterable (array, object, or string)");
+		}
+	}
+
+	// Array method callback helper (supports builtin and user-defined functions)
+	Value invokeArrayCallback(std::shared_ptr<Function> cb, const Value& elem, size_t index, std::shared_ptr<Array> arr) {
+		if (cb->isBuiltin) {
+			std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(index)) }, Value{arr} };
+			return cb->builtin(carg, cb->closure);
+		}
+		auto local = std::make_shared<Environment>(cb->closure);
+		if (cb->params.size() > 0) local->define(cb->params[0], elem);
+		if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(index)) });
+		if (cb->params.size() > 2) local->define(cb->params[2], Value{arr});
+		Value res{std::monostate{}};
+		try { executeBlock(cb->body, local); }
+		catch (const ReturnSignal& rs) { res = rs.value; }
+		return res;
+	}
 
 	// Proxy support functions (need access to executeBlock)
 	Value proxyGet(const Value& proxyVal, const std::string& prop) {
@@ -2229,86 +1945,56 @@ public:
 		dispatchPromiseCallbacks(p);
 	}
 
-	void dispatchPromiseCallbacks(std::shared_ptr<PromiseState> p) override {
+	void dispatchCallbackList(
+		const std::vector<std::pair<std::shared_ptr<Function>, std::shared_ptr<PromiseState>>>& callbacks,
+		const Value& result, std::shared_ptr<PromiseState> p) {
 		if (!p->loopPtr) return;
 		auto loop = static_cast<Interpreter*>(p->loopPtr);
+		for (auto& pair : callbacks) {
+			auto cb = pair.first; auto nextP = pair.second;
+			loop->postTask([this, cb, nextP, p, result]() {
+				try {
+					std::vector<Value> a{ result };
+					Value ret{std::monostate{}};
+					if (cb->isBuiltin) ret = cb->builtin(a, cb->closure);
+					else {
+						auto local = std::make_shared<Environment>(cb->closure);
+						if (a.size() != cb->params.size()) {
+							if (!cb->params.empty()) local->define(cb->params[0], result);
+						} else {
+							for (size_t i = 0; i < a.size(); ++i) local->define(cb->params[i], a[i]);
+						}
+						try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
+					}
+					if (std::holds_alternative<std::shared_ptr<PromiseState>>(ret)) {
+						auto inner = std::get<std::shared_ptr<PromiseState>>(ret);
+						{
+							std::lock_guard<std::mutex> lk(inner->mtx);
+							inner->loopPtr = this;
+							inner->thenCallbacks.push_back({ makeResolver(), nextP });
+							inner->catchCallbacks.push_back({ makeRejecter(), nextP });
+						}
+						if (inner->settled) dispatchPromiseCallbacks(inner);
+					} else {
+						settlePromise(nextP, false, ret);
+					}
+				} catch (const ExceptionSignal& ex) {
+					settlePromise(nextP, true, ex.value);
+				} catch (const std::exception& ex) {
+					settlePromise(nextP, true, Value{ std::string(ex.what()) });
+				} catch (...) {
+					settlePromise(nextP, true, Value{ std::string("error") });
+				}
+			});
+		}
+	}
+
+	void dispatchPromiseCallbacks(std::shared_ptr<PromiseState> p) override {
+		if (!p->loopPtr) return;
 		if (!p->rejected) {
-			for (auto& pair : p->thenCallbacks) {
-				auto cb = pair.first; auto nextP = pair.second;
-				loop->postTask([this, cb, nextP, p]() {
-					try {
-						std::vector<Value> a{ p->result };
-						Value ret{std::monostate{}};
-						if (cb->isBuiltin) ret = cb->builtin(a, cb->closure);
-						else {
-							auto local = std::make_shared<Environment>(cb->closure);
-							if (a.size() != cb->params.size()) {
-								if (!cb->params.empty()) local->define(cb->params[0], p->result);
-							} else {
-								for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
-							}
-							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
-						}
-						if (std::holds_alternative<std::shared_ptr<PromiseState>>(ret)) {
-							auto inner = std::get<std::shared_ptr<PromiseState>>(ret);
-							// 链接：inner 完成后再 settle nextP
-							{
-								std::lock_guard<std::mutex> lk(inner->mtx);
-								inner->loopPtr = this;
-								inner->thenCallbacks.push_back({ makeResolver(), nextP });
-								inner->catchCallbacks.push_back({ makeRejecter(), nextP });
-							}
-							if (inner->settled) dispatchPromiseCallbacks(inner);
-						} else {
-							settlePromise(nextP, false, ret);
-						}
-					} catch (const ExceptionSignal& ex) {
-						settlePromise(nextP, true, ex.value);
-					} catch (const std::exception& ex) {
-						settlePromise(nextP, true, Value{ std::string(ex.what()) });
-					} catch (...) {
-						settlePromise(nextP, true, Value{ std::string("error") });
-					}
-				});
-			}
+			dispatchCallbackList(p->thenCallbacks, p->result, p);
 		} else {
-			for (auto& pair : p->catchCallbacks) {
-				auto cb = pair.first; auto nextP = pair.second;
-				loop->postTask([this, cb, nextP, p]() {
-					try {
-						std::vector<Value> a{ p->result };
-						Value ret{std::monostate{}};
-						if (cb->isBuiltin) ret = cb->builtin(a, cb->closure);
-						else {
-							auto local = std::make_shared<Environment>(cb->closure);
-							if (a.size() != cb->params.size()) {
-								if (!cb->params.empty()) local->define(cb->params[0], p->result);
-							} else {
-								for (size_t i=0;i<a.size();++i) local->define(cb->params[i], a[i]);
-							}
-							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { ret = rs.value; }
-						}
-						if (std::holds_alternative<std::shared_ptr<PromiseState>>(ret)) {
-							auto inner = std::get<std::shared_ptr<PromiseState>>(ret);
-							{
-								std::lock_guard<std::mutex> lk(inner->mtx);
-								inner->loopPtr = this;
-								inner->thenCallbacks.push_back({ makeResolver(), nextP });
-								inner->catchCallbacks.push_back({ makeRejecter(), nextP });
-							}
-							if (inner->settled) dispatchPromiseCallbacks(inner);
-						} else {
-							settlePromise(nextP, false, ret);
-						}
-					} catch (const ExceptionSignal& ex) {
-						settlePromise(nextP, true, ex.value);
-					} catch (const std::exception& ex) {
-						settlePromise(nextP, true, Value{ std::string(ex.what()) });
-					} catch (...) {
-						settlePromise(nextP, true, Value{ std::string("error") });
-					}
-				});
-			}
+			dispatchCallbackList(p->catchCallbacks, p->result, p);
 		}
 	}
 
@@ -2422,63 +2108,40 @@ public:
 	}
 
 	// Helpers for object/array/class/instance access
-	static std::shared_ptr<Function> findMethod(std::shared_ptr<ClassInfo> k, const std::string& name) {
+	// Generic class hierarchy lookup with configurable map accessor
+	template<typename MapGetter>
+	static std::shared_ptr<Function> findInHierarchy(std::shared_ptr<ClassInfo> k, const std::string& name, MapGetter&& getMap) {
 		if (!k) return nullptr;
-		auto it = k->methods.find(name);
-		if (it != k->methods.end()) return it->second;
-		// 多继承：按声明顺序递归线性查找
+		auto& m = getMap(k);
+		auto it = m.find(name);
+		if (it != m.end()) return it->second;
 		for (auto& s : k->supers) {
-			auto f = findMethod(s, name);
+			auto f = findInHierarchy(s, name, std::forward<MapGetter>(getMap));
 			if (f) return f;
 		}
 		return nullptr;
+	}
+	static std::shared_ptr<Function> findMethod(std::shared_ptr<ClassInfo> k, const std::string& name) {
+		return findInHierarchy(k, name, [](auto& k) -> auto& { return k->methods; });
 	}
 	static std::shared_ptr<Function> findStaticMethod(std::shared_ptr<ClassInfo> k, const std::string& name) {
-		if (!k) return nullptr;
-		auto it = k->staticMethods.find(name);
-		if (it != k->staticMethods.end()) return it->second;
-		for (auto& s : k->supers) {
-			auto f = findStaticMethod(s, name);
-			if (f) return f;
-		}
-		return nullptr;
+		return findInHierarchy(k, name, [](auto& k) -> auto& { return k->staticMethods; });
 	}
-	// Helper to find getter in class hierarchy
 	static std::shared_ptr<Function> findGetter(std::shared_ptr<ClassInfo> k, const std::string& name) {
-		if (!k) return nullptr;
-		auto it = k->getters.find(name);
-		if (it != k->getters.end()) return it->second;
-		for (auto& s : k->supers) {
-			auto f = findGetter(s, name);
-			if (f) return f;
-		}
-		return nullptr;
+		return findInHierarchy(k, name, [](auto& k) -> auto& { return k->getters; });
 	}
-	// Helper to find setter in class hierarchy
 	static std::shared_ptr<Function> findSetter(std::shared_ptr<ClassInfo> k, const std::string& name) {
-		if (!k) return nullptr;
-		auto it = k->setters.find(name);
-		if (it != k->setters.end()) return it->second;
-		for (auto& s : k->supers) {
-			auto f = findSetter(s, name);
-			if (f) return f;
-		}
-		return nullptr;
+		return findInHierarchy(k, name, [](auto& k) -> auto& { return k->setters; });
 	}
 	Value getProperty(const Value& obj, const std::string& name) {
-		// Check if this is a Proxy instance (has _isProxy marker)
+		// Instance: proxy check, getters, fields, methods, reflection API
 		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
 			if (*pins) {
+				// Check proxy first
 				auto isProxyIt = (*pins)->fields.find("_isProxy");
 				if (isProxyIt != (*pins)->fields.end()) {
-					// This is a proxy, use proxyGet to invoke handler traps
 					return proxyGet(obj, name);
 				}
-			}
-		}
-		// Instance: getters first, then fields, then methods
-		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
-			if (*pins) {
 				// Check for getter (takes priority over fields)
 				if ((*pins)->klass) {
 					auto getter = findGetter((*pins)->klass, name);
@@ -2510,13 +2173,9 @@ public:
 						return bound;
 					}
 				}
-				return Value{std::monostate{}};
-			}
-		}
-		// 反射 API：获取实例的方法列表
-		if (auto pins = std::get_if<std::shared_ptr<Instance>>(&obj)) {
-			if (*pins && (*pins)->klass) {
-				if (name == "getMethods") {
+				// 反射 API：获取实例的方法列表
+				if ((*pins)->klass) {
+					if (name == "getMethods") {
 					auto fn = std::make_shared<Function>(); fn->isBuiltin = true; auto inst = *pins;
 					fn->builtin = [inst](const std::vector<Value>&, std::shared_ptr<Environment>)->Value {
 						auto arr = std::make_shared<Array>();
@@ -2582,6 +2241,8 @@ public:
 					return fn;
 				}
 			}
+			return Value{std::monostate{}};
+		}
 		}
 		// Class (static methods)
 		if (auto pcls = std::get_if<std::shared_ptr<ClassInfo>>(&obj)) {
@@ -2635,19 +2296,7 @@ public:
 					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
 					auto out = std::make_shared<Array>();
 					for (size_t i = 0; i < a->size(); ++i) {
-						Value elem = (*a)[i];
-						Value res{std::monostate{}};
-						if (cb->isBuiltin) {
-							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
-							res = cb->builtin(carg, cb->closure);
-						} else {
-							auto local = std::make_shared<Environment>(cb->closure);
-							if (cb->params.size() > 0) local->define(cb->params[0], elem);
-							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
-							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
-							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
-						}
-						out->push_back(res);
+						out->push_back(invokeArrayCallback(cb, (*a)[i], i, a));
 					}
 					return Value{out};
 				};
@@ -2661,19 +2310,7 @@ public:
 					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
 					auto out = std::make_shared<Array>();
 					for (size_t i = 0; i < a->size(); ++i) {
-						Value elem = (*a)[i];
-						Value res{std::monostate{}};
-						if (cb->isBuiltin) {
-							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
-							res = cb->builtin(carg, cb->closure);
-						} else {
-							auto local = std::make_shared<Environment>(cb->closure);
-							if (cb->params.size() > 0) local->define(cb->params[0], elem);
-							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
-							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
-							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
-						}
-						if (isTruthy(res)) out->push_back(elem);
+						if (isTruthy(invokeArrayCallback(cb, (*a)[i], i, a))) out->push_back((*a)[i]);
 					}
 					return Value{out};
 				};
@@ -2715,19 +2352,7 @@ public:
 					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("find expects a single function argument");
 					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
 					for (size_t i = 0; i < a->size(); ++i) {
-						Value elem = (*a)[i];
-						Value res{std::monostate{}};
-						if (cb->isBuiltin) {
-							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
-							res = cb->builtin(carg, cb->closure);
-						} else {
-							auto local = std::make_shared<Environment>(cb->closure);
-							if (cb->params.size() > 0) local->define(cb->params[0], elem);
-							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
-							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
-							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
-						}
-						if (isTruthy(res)) return elem;
+						if (isTruthy(invokeArrayCallback(cb, (*a)[i], i, a))) return (*a)[i];
 					}
 					return Value{std::monostate{}};
 				};
@@ -2740,19 +2365,7 @@ public:
 					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("some expects a single function argument");
 					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
 					for (size_t i = 0; i < a->size(); ++i) {
-						Value elem = (*a)[i];
-						Value res{std::monostate{}};
-						if (cb->isBuiltin) {
-							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
-							res = cb->builtin(carg, cb->closure);
-						} else {
-							auto local = std::make_shared<Environment>(cb->closure);
-							if (cb->params.size() > 0) local->define(cb->params[0], elem);
-							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
-							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
-							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
-						}
-						if (isTruthy(res)) return Value{true};
+						if (isTruthy(invokeArrayCallback(cb, (*a)[i], i, a))) return Value{true};
 					}
 					return Value{false};
 				};
@@ -2765,19 +2378,7 @@ public:
 					if (args.size() != 1 || !std::holds_alternative<std::shared_ptr<Function>>(args[0])) throw std::runtime_error("every expects a single function argument");
 					auto cb = std::get<std::shared_ptr<Function>>(args[0]);
 					for (size_t i = 0; i < a->size(); ++i) {
-						Value elem = (*a)[i];
-						Value res{std::monostate{}};
-						if (cb->isBuiltin) {
-							std::vector<Value> carg{ elem, Value{ static_cast<double>(static_cast<int>(i)) }, Value{a} };
-							res = cb->builtin(carg, cb->closure);
-						} else {
-							auto local = std::make_shared<Environment>(cb->closure);
-							if (cb->params.size() > 0) local->define(cb->params[0], elem);
-							if (cb->params.size() > 1) local->define(cb->params[1], Value{ static_cast<double>(static_cast<int>(i)) });
-							if (cb->params.size() > 2) local->define(cb->params[2], Value{a});
-							try { executeBlock(cb->body, local); } catch (const ReturnSignal& rs) { res = rs.value; }
-						}
-						if (!isTruthy(res)) return Value{false};
+						if (!isTruthy(invokeArrayCallback(cb, (*a)[i], i, a))) return Value{false};
 					}
 					return Value{true};
 				};
